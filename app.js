@@ -12,6 +12,7 @@ import passport from 'passport';
 import {Strategy} from 'passport-local';
 import { bktUpdate, bktNext } from './services/bktClient.js';
 import { ensureBktService } from './services/bktRunner.js';
+import { YoutubeTranscript } from "@danielxceron/youtube-transcript";
 dotenv.config();
 
 const app = express();
@@ -342,13 +343,13 @@ passport.serializeUser((user, cb) => {
 passport.deserializeUser((user, cb) => {
     cb(null, user);
 });
-
 // Main generation route
 app.post("/generate", ensureAuthenticated, upload.single('document'), async (req, res) => {
     const topic = req.body.topic;
     const level = req.body.gradeLevel;
     const type = req.body.studyType;
     const method = req.body.inputMethod;
+    const url = req.body.url;
     req.session.topic = topic;
     req.session.level = level;
     
@@ -524,7 +525,7 @@ Grade Level: ${level}`
             }
         }
     }
-    else {
+    else if(method === "pdf") {
         if (!req.file) {
             return res.status(400).send("Please upload a PDF file");
         }
@@ -757,6 +758,175 @@ Requirements:
             }
             
             return res.status(500).send("Failed to process PDF. Please try again.");
+        }
+    }
+    else if(method==="url")
+    {
+        console.log(url);
+        const transcript = await YoutubeTranscript.fetchTranscript(url, { lang: 'en' })
+        console.log(transcript);
+        let fullText = transcript.map(item=>item.text).join(" ");
+        if (type === "quicknotes") {
+            try {
+                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
+                    model: "sonar-pro",
+                    messages: [
+                        {
+                            "role": "system",
+                            "content": "You are an expert educator. Create study materials in HTML format with proper tags. Never show your research process or mention search results. Start directly with the educational content. For ALL mathematical expressions, use proper notation enclosed in $$ (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$)"
+                        },
+                        {
+                            "role": "user",
+                            "content": `Write extremely thorough study notes from the transcript of an educational study video which is as follows: ${fullText} for ${level} level students. The student should be able to revise this for exams.
+
+Format Requirements:
+- Start with a clear definition
+- Use HTML tags: <h1>, <h2>, <h3> for headings
+- Use <strong> for bold, <em> for italic
+- Use <p> for paragraphs and <br> for line breaks
+- Use <ul><li> for bullet points
+- Add practical examples
+- No meta-commentary about sources
+- No phrases like "based on the search results"
+- If mathematical in nature, include example problems with solutions formatted in $$...$$ notation
+- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$E = mc^2$$)
+
+Topic: ${url}
+Level: ${level}`
+                        }
+                    ]
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
+                    }
+                });
+                
+                req.session.content = response.data.choices[0].message.content
+                res.render("quicknotes.ejs", {
+                    topic: "Youtube Video",
+                    gradeLevel: level,
+                    content: response.data.choices[0].message.content
+                });
+                
+            } catch (error) {
+                console.error("Quick notes error:", error.message);
+                res.status(500).send("Failed to generate notes. Please try again.");
+            }
+        }
+        else if (type === "flashcards") {
+            try {
+                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
+                    "model": "sonar-pro",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Create flashcards in JSON format. Return only a JSON array of objects with 'question' and 'answer' properties. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\frac{1}{2}$$)"
+                        },
+                        {
+                            "role": "user",
+                            "content": `Generate 10 flashcards using the transcript of a youtube video which is as follows: ${fullText} at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}].
+
+Requirements:
+- No meta-commentary about sources
+- No phrases like "based on the search results"
+- Include mathematical concepts in $$...$$ notation where needed
+- ALL mathematical expressions MUST use proper notation enclosed in $$`
+                        }
+                    ]
+                }, {
+                    headers: {
+                        "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+                
+                const flashcards = JSON.parse(response.data.choices[0].message.content);
+                
+                req.session.flashcards = flashcards;
+                req.session.topic = url;
+                req.session.gradeLevel = level;
+                
+                res.render("flashcards.ejs", {
+                    topic: "Youtube Video",
+                    gradeLevel: level,
+                    content: flashcards,
+                    currentIndex: 0,
+                    showAnswer: false
+                });
+                
+            } catch (error) {
+                console.error("Flashcards error:", error.message);
+                res.status(500).send("Failed to generate flashcards. Please try again.");
+            }
+        } 
+        else {
+            try {
+                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
+                    model: "sonar-pro",
+                    messages: [
+                        {
+                            "role": "system",
+                            "content": "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or formatting. Each question must have exactly 4 distinct, plausible options with one clearly correct answer. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$x^2 + 5x + 6$$)"
+                        },
+                        {
+                            "role": "user", 
+                            "content": `Create a 10-question multiple choice quiz from the transcript of a youtube video which is as follows: ${fullText} for ${level} school students.
+
+Requirements:
+- Format: JSON array only, no other text
+- Each question must have: question, option1, option2, option3, option4, answer
+- Answer field must specify which option is correct (e.g., "option2")
+- All options should be plausible but only one correct
+- Questions should test understanding, not just memorization
+- Use clear, grade-appropriate language
+- ONLY IF the topic is mathematical in nature or could have calculation based questions, include 3-4 questions which involve calculations
+- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\sqrt{25} = 5$$)
+
+Example format:
+[
+    {
+        "question": "What is the discriminant of the quadratic equation $$ax^2 + bx + c = 0$$?",
+        "option1": "$$b^2 - 4ac$$",
+        "option2": "$$-b \\pm \\sqrt{b^2 - 4ac}$$", 
+        "option3": "$$4ac - b^2$$",
+        "option4": "$$a^2 + b^2 + c^2$$",
+        "answer": "option1"
+    }
+]
+
+Topic: ${topic}
+Grade Level: ${level}`
+                        }
+                    ]
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
+                    }
+                });
+                
+                const content = JSON.parse(response.data.choices[0].message.content);
+                req.session.topic = url;
+                req.session.gradeLevel = level;
+                req.session.content = content;
+                let bktInfo = null;
+                try {
+                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(url) });
+                } catch (e) {
+                    console.warn('BKT next (generate) failed:', e.message || e);
+                }
+                res.render("quiz.ejs", {
+                    topic: "Youtube Video",
+                    gradeLevel: level,
+                    content: content,
+                    showResults: false,
+                    bktMastery: bktInfo?.mastery,
+                    bktRecommendedDifficulty: bktInfo?.recommendedDifficulty
+                });
+                
+            } catch (error) {
+                console.error("Quiz error:", error.message);
+                res.status(500).send("Failed to generate quiz. Please try again.");
+            }
         }
     }
 });
