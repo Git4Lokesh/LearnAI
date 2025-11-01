@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Notes - <%= topic %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [
+          ['$', '$'], 
+          ['\\(', '\\)'],
+          ['//', '//']
+        ],
+        displayMath: [
+          ['$$', '$$'], 
+          ['\\[', '\\]'],
+          ['\\\\', '\\\\']
+        ],
+        processEscapes: true,
+        processEnvironments: true,
+        macros: {
+          RR: '{\\mathbb{R}}',
+          ZZ: '{\\mathbb{Z}}',
+          NN: '{\\mathbb{N}}',
+          QQ: '{\\mathbb{Q}}',
+          CC: '{\\mathbb{C}}'
+        }
+      },
+      options: {
+        renderActions: {
+          addMenu: []
+        }
+      },
+      startup: {
+        ready: () => {
+          MathJax.startup.defaultReady();
+          MathJax.startup.promise.then(() => {
+            console.log('MathJax initial typesetting complete');
+          });
+        }
+      }
+    };
+    </script>
+    <style>
+        /* Royal Dark Theme Variables */
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+            --royal-gradient: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            --text-primary: #F8FAFC;
+            --text-secondary: #CBD5E1;
+            --text-muted: #94A3B8;
+        }
+
+
+        .selected-text-display {
+            background: var(--dark-bg) !important;
+            border: 1px solid var(--royal-gold) !important;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+
+        .selected-text-highlight {
+            background: rgba(245, 158, 11, 0.3) !important;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-weight: 500;
+            color: var(--royal-gold) !important;
+        }
+
+
+        .response-context {
+            background: var(--dark-card) !important;
+            border: 1px solid var(--dark-border) !important;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 18px;
+        }
+
+
+        .context-section {
+            margin-bottom: 12px;
+        }
+
+
+        .context-section:last-child {
+            margin-bottom: 0;
+        }
+
+
+        .context-label {
+            font-weight: 600;
+            color: var(--royal-gold) !important;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+
+        .context-content {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .question-content {
+            font-style: italic;
+            color: var(--text-muted) !important;
+        }
+
+
+        .custom-question-section {
+            border-top: 1px solid var(--dark-border) !important;
+            padding-top: 12px;
+        }
+
+
+        .custom-question-section .input-group {
+            display: flex;
+        }
+
+
+        .custom-question-section input {
+            flex: 1;
+            border: 1px solid var(--dark-border) !important;
+            background: var(--dark-bg) !important;
+            color: var(--text-primary) !important;
+            padding: 10px 15px;
+            font-size: 0.95rem;
+        }
+
+
+        .custom-question-section input:focus {
+            border-color: var(--royal-purple) !important;
+            box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25) !important;
+            outline: 0;
+            background: var(--dark-bg) !important;
+            color: var(--text-primary) !important;
+        }
+
+
+        .custom-question-section input::placeholder {
+            color: var(--text-muted) !important;
+        }
+
+
+        .math-equation { 
+            color: var(--royal-gold) !important;
+            font-weight: 500;
+        }
+
+
+        mjx-container[display="true"] {
+            margin: 1em 0;
+            text-align: center;
+        }
+
+
+        mjx-container[display="false"] {
+            display: inline-block;
+            margin: 0 0.1em;
+        }
+
+
+        /* 🔧 PERFECT: Fixed right-side context menu positioning */
+        .text-selection-popup {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--dark-card) !important;
+            border: 2px solid var(--royal-gold) !important;
+            border-radius: 16px !important;
+            padding: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4) !important;
+            z-index: 1000;
+            display: none;
+            width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+            animation: slideInRight 0.3s ease-out;
+            backdrop-filter: blur(20px);
+        }
+
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+
+        .expansion-option {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            margin: 6px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .expansion-option:hover {
+            background: rgba(124, 58, 237, 0.2) !important;
+            color: var(--royal-gold) !important;
+            transform: translateX(4px);
+        }
+
+
+        .expansion-option:active {
+            transform: translateX(2px);
+        }
+
+
+        .expansion-option i {
+            margin-right: 15px;
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+            color: var(--royal-gold) !important;
+        }
+
+
+        /* 🔧 PERFECT: Fixed right-side expansion bubble positioning */
+        .side-expansion-bubble {
+            position: fixed;
+            right: 340px; /* Just left of the popup menu */
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--dark-card) !important;
+            border: 2px solid var(--royal-purple) !important;
+            border-radius: 16px !important;
+            padding: 20px;
+            width: 380px;
+            max-height: 70vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4) !important;
+            z-index: 1001;
+            display: none;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            animation: slideInLeft 0.3s ease-out;
+            backdrop-filter: blur(20px);
+            color: var(--text-primary) !important;
+        }
+
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+
+        .side-expansion-bubble .bubble-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--dark-border);
+        }
+
+
+        .side-expansion-bubble .bubble-title {
+            font-weight: 600;
+            color: var(--royal-gold) !important;
+            font-size: 1.1rem;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+
+        .side-expansion-bubble .close-bubble {
+            background: none;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            color: var(--text-muted) !important;
+            padding: 0;
+            margin-left: 12px;
+            line-height: 1;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+
+        .side-expansion-bubble .close-bubble:hover {
+            background: rgba(124, 58, 237, 0.2);
+            color: var(--royal-gold) !important;
+            transform: scale(1.1);
+        }
+
+
+        .side-expansion-bubble .bubble-content {
+            color: var(--text-secondary) !important;
+        }
+
+
+        .side-expansion-bubble .bubble-content h6 {
+            margin: 0 0 10px 0;
+            color: var(--royal-gold) !important;
+            font-size: 1rem;
+        }
+
+
+        .side-expansion-bubble .bubble-content p {
+            margin: 0 0 10px 0;
+            line-height: 1.6;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .side-expansion-bubble .bubble-content ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+
+        .side-expansion-bubble .bubble-content li {
+            margin: 5px 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .side-expansion-bubble .bubble-content strong {
+            color: var(--royal-gold) !important;
+        }
+
+
+        .expansion-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 25px;
+            color: var(--text-muted) !important;
+            font-size: 0.95rem;
+        }
+
+
+        .selected-text-preview {
+            background: rgba(124, 58, 237, 0.15) !important;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--royal-gold);
+            font-size: 0.9rem;
+            font-style: italic;
+            color: var(--text-muted) !important;
+        }
+
+
+        .notes-container-wrapper {
+            position: relative;
+        }
+
+        /* 🔧 ADDED: Success toast styling */
+        .success-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10B981, #059669) !important;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+            z-index: 1100;
+            display: none;
+            animation: slideInFromRight 0.4s ease-out;
+            border: 2px solid var(--royal-gold);
+        }
+
+        @keyframes slideInFromRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 1400px) {
+            .side-expansion-bubble {
+                right: 320px;
+                width: 350px;
+            }
+        }
+
+
+        @media (max-width: 1200px) {
+            .side-expansion-bubble {
+                right: 300px;
+                width: 320px;
+            }
+            .text-selection-popup {
+                width: 280px;
+            }
+        }
+
+
+        @media (max-width: 768px) {
+            .text-selection-popup {
+                right: 10px;
+                left: 10px;
+                width: auto;
+                max-width: none;
+            }
+            
+            .side-expansion-bubble {
+                right: 10px;
+                left: 10px;
+                width: auto;
+                max-width: none;
+                top: 20%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-primary">
+    <!-- 🔧 ADDED: Success toast -->
+    <div id="successToast" class="success-toast">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+            <strong>Successfully Saved!</strong>
+        </div>
+    </div>
+
+    <div class="container-fluid min-vh-100 py-4">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-10 col-xl-8">
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <a href="/" class="btn btn-outline-light btn-lg rounded-pill px-4">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            Back to Dashboard
+                        </a>
+                        <div class="text-end">
+                            <small class="text-white-50 d-block">Study Materials</small>
+                        </div>
+                    </div>
+                    <div class="text-center mb-5">
+                        <div class="d-inline-flex align-items-center bg-white bg-opacity-10 rounded-pill px-4 py-2 mb-3">
+                            <i class="bi bi-journal-text text-white me-2"></i>
+                            <span class="text-white fw-semibold">Quick Notes</span>
+                        </div>
+                        <h1 class="display-5 fw-bold text-white mb-2"><%= topic %></h1>
+                        <p class="text-white-50 mb-0">
+                            <i class="bi bi-mortarboard me-2"></i>
+                            Grade Level: <%= gradeLevel %>
+                        </p>
+                        <p class="text-white-50 mb-0">
+                          <i class="bi bi-mortarboard me-2"></i>
+                          Highlight Text for Further Clarification!
+                        </p>
+                    </div>
+
+
+                    <div class="notes-container-wrapper">
+                        <div class="card border-0 shadow-lg rounded-4" id="notes-container">
+                            <div class="card-header bg-white border-0 py-4">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
+                                            <i class="bi bi-book text-primary fs-5"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="card-title mb-1 text-dark fw-semibold">Study Notes</h5>
+                                            <small class="text-muted">Comprehensive learning material</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <!-- 🔧 ONLY CHANGE: Simple form submission instead of JavaScript -->
+                                        <form action="/save-quicknotes" method="POST" style="display: inline;">
+                                            <input type="hidden" name="topic" value="<%= topic %>">
+                                            <input type="hidden" name="gradeLevel" value="<%= gradeLevel %>">
+                                            <input type="hidden" name="content" value="<%- content.replace(/"/g, '&quot;') %>">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm rounded-pill" id="saveBtn">
+                                                <i class="bi bi-bookmark me-1"></i>
+                                                Save Notes
+                                            </button>
+                                        </form>
+                                        <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="window.print()">
+                                            <i class="bi bi-printer me-1"></i>
+                                            Print
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="copyToClipboard()">
+                                            <i class="bi bi-clipboard me-1"></i>
+                                            Copy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card-body p-5">
+                                <div class="notes-content">
+                                    <div class="notes-text lh-lg" id="notes-text">
+                                        <%- content %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-md-6 mb-3">
+                            <a href="/" class="btn btn-outline-light btn-lg w-100 py-3">
+                                <i class="bi bi-house me-2"></i>
+                                Back to Dashboard
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <button class="btn btn-light btn-lg w-100 py-3" onclick="generateMoreNotes()">
+                                <i class="bi bi-plus-circle me-2"></i>
+                                Generate More Notes
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="text-center mt-4">
+                        <small class="text-white-50">
+                            <i class="bi bi-lightbulb me-1"></i>
+                            Tip: Highlight any text for quick explanations in the side panel
+                        </small>
+                    </div>
+
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<div id="text-selection-popup" class="text-selection-popup">
+    <div class="selected-text-display mb-3">
+        <div class="text-muted" style="font-size: 0.8rem; margin-bottom: 4px; color: var(--text-muted) !important;">Selected Text:</div>
+        <div id="popup-selected-text" class="selected-text-highlight" style="font-size: 0.9rem; line-height: 1.3;">
+        </div>
+    </div>
+    
+    <button class="expansion-option" onclick="expandText('explain')">
+        <i class="bi bi-chat-dots"></i>
+        Explain
+    </button>
+    <button class="expansion-option" onclick="expandText('examples')">
+        <i class="bi bi-lightbulb"></i>
+        Examples
+    </button>
+    <button class="expansion-option" onclick="expandText('simplify')">
+        <i class="bi bi-arrow-down-circle"></i>
+        Simplify
+    </button>
+    <button class="expansion-option" onclick="expandText('context')">
+        <i class="bi bi-info-circle"></i>
+        Context
+    </button>
+    
+    <div class="custom-question-section mt-2">
+        <div class="input-group">
+            <input type="text" 
+                   id="popup-custom-question" 
+                   class="form-control" 
+                   placeholder="Ask a custom question..."
+                   style="font-size: 0.9rem; border-radius: 6px 0 0 6px;">
+            <button class="btn btn-primary" 
+                    onclick="submitCustomFromPopup()"
+                    style="border-radius: 0 6px 6px 0; font-size: 0.9rem;">
+                <i class="bi bi-send"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+
+    <div id="side-expansion-bubble" class="side-expansion-bubble">
+        <div class="bubble-header">
+            <h6 class="bubble-title" id="bubble-title">Explanation</h6>
+            <button class="close-bubble" onclick="closeSideBubble()">×</button>
+        </div>
+        <div class="selected-text-preview" id="selected-text-preview">
+        </div>
+        <div class="bubble-content" id="bubble-content">
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let selectedText = '';
+        let currentExpansionType = '';
+
+        // 🔧 ADDED: Check for success parameter and show toast
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if page was loaded after a save operation
+            <% if (typeof saved !== 'undefined' && saved === true) { %>
+        const toast = document.getElementById('successToast');
+        toast.style.display = 'block';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
+    <% } %>
+
+            // ALL YOUR ORIGINAL CONTEXT MENU CODE STAYS THE SAME
+            const notesText = document.getElementById('notes-text');
+            const popup = document.getElementById('text-selection-popup');
+            const sideBubble = document.getElementById('side-expansion-bubble');
+
+
+            notesText.addEventListener('mouseup', function(e) {
+                const selection = window.getSelection();
+                const text = selection.toString().trim();
+                
+                if (text.length > 0) {
+                    selectedText = text;
+                    showSelectionPopup();
+                } else {
+                    hideSelectionPopup();
+                }
+            });
+
+
+            // 🔧 FIXED: Only hide when clicking outside both popup and bubble
+            document.addEventListener('click', function(e) {
+                if (!popup.contains(e.target) && 
+                    !notesText.contains(e.target) && 
+                    !sideBubble.contains(e.target)) {
+                    hideSelectionPopup();
+                    closeSideBubble();
+                }
+            });
+
+
+            // 🔧 PERFECT: No need for scroll/resize handlers - fixed positioning handles it
+        });
+
+        function submitCustomFromPopup() {
+            const questionInput = document.getElementById('popup-custom-question');
+            const customQuestion = questionInput.value.trim();
+            
+            if (!customQuestion) {
+                alert('Please enter a question');
+                return;
+            }
+            
+            expandText('custom', customQuestion);
+            questionInput.value = '';
+        }
+
+
+        // 🔧 SIMPLIFIED: Perfect right-side positioning
+        function showSelectionPopup() {
+            const popup = document.getElementById('text-selection-popup');
+            document.getElementById('popup-selected-text').textContent = selectedText;
+            popup.style.display = 'block';
+        }
+
+
+        function hideSelectionPopup() {
+            const popup = document.getElementById('text-selection-popup');
+            popup.style.display = 'none';
+        }
+
+
+        // 🔧 FIXED: Don't hide popup when expanding text
+        async function expandText(type, customQuestion = '') {
+            if (!selectedText) return;
+
+
+            currentExpansionType = type;
+            // DON'T hide the popup - let it persist
+            
+            showSideBubble(type);
+            
+            document.getElementById('bubble-content').innerHTML = `
+                <div class="expansion-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Loading...
+                </div>
+            `;
+
+
+            try {
+                const expandedContent = await generateExpansion(selectedText, type, customQuestion);
+                displayExpansionInSideBubble(expandedContent, type);
+            } catch (error) {
+                console.error('Error expanding text:', error);
+                document.getElementById('bubble-content').innerHTML = `
+                    <div class="text-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Failed to load explanation
+                    </div>
+                `;
+            }
+        }
+
+
+        // 🔧 SIMPLIFIED: Perfect positioning with fixed positioning
+        function showSideBubble(type) {
+            const bubble = document.getElementById('side-expansion-bubble');
+            
+            const titles = {
+                'explain': 'Explanation',
+                'examples': 'Examples',
+                'simplify': 'Simplified',
+                'context': 'Context',
+                'custom': 'Your Question'
+            };
+
+
+            document.getElementById('bubble-title').textContent = titles[type];
+            document.getElementById('selected-text-preview').innerHTML = `
+                <strong>Selected:</strong> "${selectedText}"
+            `;
+            
+            bubble.style.display = 'block';
+        }
+
+
+        function closeSideBubble() {
+            document.getElementById('side-expansion-bubble').style.display = 'none';
+        }
+
+
+        async function generateExpansion(text, type, customQuestion = '') {
+            const prompts = {
+                'explain': `Briefly explain: "${text}". Give a concise definition and key points in 2-3 sentences.`,
+                'examples': `Provide 2-3 quick examples of: "${text}". Keep it short and practical.`,
+                'simplify': `Simplify: "${text}". Explain in simple terms in 1-2 sentences.`,
+                'context': `Provide brief context for: "${text}". Explain why it's important in 2-3 sentences.`
+            };
+
+
+            const body = {
+                text: text,
+                type: type,
+                topic: '<%= topic %>',
+                gradeLevel: '<%= gradeLevel %>'
+            };
+
+
+            if (type === 'custom' && customQuestion) {
+                body.customQuestion = customQuestion;
+            } else {
+                body.prompt = prompts[type];
+            }
+
+
+            const response = await fetch('/api/expand-text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body)
+            });
+
+
+            if (!response.ok) {
+                throw new Error('Failed to generate expansion');
+            }
+
+
+            const data = await response.json();
+            return data.expansion;
+        }
+
+
+        function displayExpansionInSideBubble(content, type) {
+            document.getElementById('bubble-content').innerHTML = content;
+
+
+            if (window.MathJax) {
+                MathJax.typesetPromise([document.getElementById('bubble-content')]);
+            }
+        }
+
+        // 🔧 REMOVED: Complex saveQuickNotes function - now using simple form
+
+        function copyToClipboard() {
+            const notesText = document.querySelector('.notes-text').innerText;
+            navigator.clipboard.writeText(notesText).then(() => {
+                showToast('Notes copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast('Failed to copy notes', 'error');
+            });
+        }
+
+
+        function generateMoreNotes() {
+            window.location.href = '/?topic=<%= encodeURIComponent(topic) %>&gradeLevel=<%= gradeLevel %>';
+        }
+
+
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container') || createToastContainer();
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px; backdrop-filter: blur(20px);';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 3000);
+        }
+
+
+        function createToastContainer() {
+            const container = document.createElement('div');
+            container.id = 'toast-container';
+            document.body.appendChild(container);
+            return container;
+        }
+    </script>
+
+
+    <!-- Royal Dark Theme Styles (keeping all previous styles) -->
+    <style>
+        .bg-gradient-primary {
+            background: var(--royal-gradient) !important;
+        }
+
+
+        .card {
+            background: var(--dark-card) !important;
+            border: 2px solid var(--royal-purple) !important;
+            box-shadow: 0 20px 40px rgba(124, 58, 237, 0.2) !important;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s ease;
+        }
+
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 30px 60px rgba(124, 58, 237, 0.3) !important;
+        }
+
+
+        .card-header {
+            background: linear-gradient(135deg, var(--dark-card) 0%, rgba(30, 41, 59, 0.9) 100%) !important;
+            border-bottom: 1px solid var(--royal-gold) !important;
+        }
+
+
+        .card-body {
+            background: linear-gradient(135deg, var(--dark-card) 0%, rgba(30, 41, 59, 0.8) 100%);
+        }
+
+
+        .text-primary {
+            color: var(--royal-gold) !important;
+        }
+
+
+        .card-title {
+            color: var(--text-primary) !important;
+        }
+
+
+        .text-muted {
+            color: var(--text-muted) !important;
+        }
+
+
+        .text-dark {
+            color: var(--text-primary) !important;
+        }
+
+
+        .text-white-50 {
+            color: var(--text-muted) !important;
+        }
+
+
+        .btn-outline-primary {
+            background: rgba(15, 23, 42, 0.8) !important;
+            border: 2px solid var(--royal-purple) !important;
+            color: var(--text-primary) !important;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+
+        .btn-outline-primary:hover, .btn-outline-primary:focus {
+            background: linear-gradient(135deg, var(--royal-purple), var(--royal-blue)) !important;
+            border-color: var(--royal-gold) !important;
+            color: white !important;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
+        }
+
+
+        .btn-outline-light {
+            background: rgba(15, 23, 42, 0.8) !important;
+            border: 2px solid var(--royal-purple) !important;
+            color: var(--text-primary) !important;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+
+        .btn-outline-light:hover, .btn-outline-light:focus {
+            background: linear-gradient(135deg, var(--royal-purple), var(--royal-blue)) !important;
+            border-color: var(--royal-gold) !important;
+            color: white !important;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
+        }
+
+
+        .btn-light {
+            background: linear-gradient(135deg, var(--royal-gold) 0%, #FCD34D 100%) !important;
+            border: 2px solid var(--royal-purple) !important;
+            color: var(--dark-bg) !important;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+
+        .btn-light:hover, .btn-light:focus {
+            background: linear-gradient(135deg, #FCD34D 0%, var(--royal-gold) 100%) !important;
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(245, 158, 11, 0.4);
+        }
+
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%) !important;
+            border: 2px solid var(--royal-gold) !important;
+            color: white !important;
+            transition: all 0.3s ease;
+        }
+
+
+        .btn-primary:hover, .btn-primary:focus {
+            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%) !important;
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(124, 58, 237, 0.5);
+        }
+
+
+        .btn-success {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+            border: 2px solid var(--royal-gold) !important;
+            color: white !important;
+            transition: all 0.3s ease;
+        }
+
+
+        .btn-danger {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+            border: 2px solid var(--royal-gold) !important;
+            color: white !important;
+            transition: all 0.3s ease;
+        }
+
+
+        .bg-white.bg-opacity-10 {
+            background: rgba(124, 58, 237, 0.2) !important;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            backdrop-filter: blur(15px);
+        }
+
+
+        .bg-primary.bg-opacity-10 {
+            background: rgba(245, 158, 11, 0.2) !important;
+        }
+
+
+        .notes-text {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: var(--text-primary) !important;
+            user-select: text;
+        }
+
+
+        .notes-text h1,
+        .notes-text h2,
+        .notes-text h3,
+        .notes-text h4,
+        .notes-text h5,
+        .notes-text h6 {
+            color: var(--royal-gold) !important;
+            margin: 2rem 0 1rem 0;
+            font-weight: 600;
+        }
+
+
+        .notes-text h1 { 
+            font-size: 2.2rem; 
+            border-bottom: 2px solid var(--royal-gold); 
+            padding-bottom: 0.5rem; 
+        }
+        .notes-text h2 { font-size: 1.8rem; }
+        .notes-text h3 { font-size: 1.5rem; }
+        .notes-text h4 { font-size: 1.25rem; }
+
+
+        .notes-text p {
+            margin-bottom: 1.2rem;
+            text-align: justify;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .notes-text ul,
+        .notes-text ol {
+            margin: 1.5rem 0;
+            padding-left: 2rem;
+        }
+
+
+        .notes-text li {
+            margin-bottom: 0.8rem;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .notes-text strong,
+        .notes-text b {
+            color: var(--royal-gold) !important;
+            font-weight: 600;
+        }
+
+
+        .notes-text em,
+        .notes-text i {
+            color: var(--text-muted) !important;
+            font-style: italic;
+        }
+
+
+        .notes-text code {
+            background: var(--dark-bg) !important;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: var(--royal-gold) !important;
+            border: 1px solid var(--dark-border);
+        }
+
+
+        .notes-text pre {
+            background: var(--dark-bg) !important;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--royal-gold);
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            color: var(--text-primary) !important;
+        }
+
+
+        .notes-text blockquote {
+            border-left: 4px solid var(--royal-gold);
+            background: rgba(124, 58, 237, 0.1) !important;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            font-style: italic;
+            border-radius: 0 8px 8px 0;
+            color: var(--text-secondary) !important;
+        }
+
+
+        .notes-text table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+
+        .notes-text th,
+        .notes-text td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--dark-border);
+            color: var(--text-secondary) !important;
+        }
+
+
+        .notes-text th {
+            background: var(--royal-purple) !important;
+            color: white !important;
+            font-weight: 600;
+        }
+
+
+        .notes-text tr:hover {
+            background: rgba(124, 58, 237, 0.1) !important;
+        }
+
+
+        .btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+
+        .btn:focus {
+            outline: 2px solid var(--royal-gold);
+            outline-offset: 2px;
+        }
+
+
+        @media (max-width: 768px) {
+            .card-body {
+                padding: 2rem !important;
+            }
+            
+            .notes-text {
+                font-size: 1rem;
+            }
+            
+            .notes-text h1 { font-size: 1.8rem; }
+            .notes-text h2 { font-size: 1.5rem; }
+            .notes-text h3 { font-size: 1.3rem; }
+        }
+
+
+        @media print {
+            body {
+                background: white !important;
+            }
+            
+            .btn, .text-white-50, .bg-gradient-primary, .side-expansion-bubble, .text-selection-popup {
+                display: none !important;
+            }
+            
+            .card {
+                box-shadow: none !important;
+                border: 1px solid #dee2e6 !important;
+                background: white !important;
+            }
+            
+            .card-header {
+                background: white !important;
+            }
+            
+            .notes-text, .notes-text * {
+                color: black !important;
+            }
+        }
+
+
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</body>
+</html>
