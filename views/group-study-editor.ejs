@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit: <%= content.title || content.topic %> - Group Study</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+        }
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            min-height: 100vh;
+            color: #F8FAFC;
+        }
+        .editor-container {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        #editor {
+            background: var(--dark-bg);
+            border: 2px solid var(--dark-border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            min-height: 500px;
+            color: #F8FAFC;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        #editor:focus {
+            outline: none;
+            border-color: var(--royal-purple);
+        }
+        .editor-toolbar {
+            background: var(--dark-bg);
+            border: 2px solid var(--dark-border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .editor-toolbar button {
+            margin-right: 0.5rem;
+        }
+        .annotation-panel {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 1rem;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .annotation-item {
+            background: var(--dark-bg);
+            border-left: 3px solid var(--royal-purple);
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            border-radius: 4px;
+        }
+        .collaborator-indicator {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 8px;
+            padding: 1rem;
+            min-width: 200px;
+        }
+        .collaborator-item {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: var(--dark-bg);
+            border-radius: 4px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/group-study/room/<%= room.id %>">
+                <i class="bi bi-arrow-left me-2"></i>Edit: <%= content.title || content.topic %>
+            </a>
+            <div class="navbar-nav ms-auto">
+                <button class="btn btn-sm btn-primary me-2" onclick="saveContent()">
+                    <i class="bi bi-save me-2"></i>Save
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid" style="padding-top: 100px;">
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="editor-container">
+                    <div class="editor-toolbar">
+                        <button class="btn btn-sm btn-outline-light" onclick="formatText('bold')" title="Bold">
+                            <i class="bi bi-type-bold"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" onclick="formatText('italic')" title="Italic">
+                            <i class="bi bi-type-italic"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" onclick="formatText('underline')" title="Underline">
+                            <i class="bi bi-type-underline"></i>
+                        </button>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-light" onclick="formatText('h1')" title="Heading 1">H1</button>
+                            <button class="btn btn-outline-light" onclick="formatText('h2')" title="Heading 2">H2</button>
+                            <button class="btn btn-outline-light" onclick="formatText('h3')" title="Heading 3">H3</button>
+                        </div>
+                        <button class="btn btn-sm btn-outline-light" onclick="insertList('ul')" title="Bullet List">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-light" onclick="insertList('ol')" title="Numbered List">
+                            <i class="bi bi-list-ol"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="editor" contenteditable="true">
+                        <%= typeof content.content_data === 'string' ? content.content_data : (content.content_data.note_content || content.content_data) %>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button class="btn btn-primary" onclick="saveContent()">
+                            <i class="bi bi-save me-2"></i>Save Changes
+                        </button>
+                        <button class="btn btn-outline-light" onclick="addAnnotation()">
+                            <i class="bi bi-sticky me-2"></i>Add Annotation
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3">
+                <div class="collaborator-indicator">
+                    <h6><i class="bi bi-people me-2"></i>Active Editors</h6>
+                    <div id="collaboratorsList">
+                        <div class="collaborator-item">
+                            <span class="presence-indicator"></span>
+                            <%= user.name %> (You)
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="annotation-panel mt-3">
+                    <h6><i class="bi bi-sticky me-2"></i>Annotations</h6>
+                    <div id="annotationsList">
+                        <% annotations.forEach(ann => { %>
+                            <div class="annotation-item">
+                                <strong><%= ann.user_name %>:</strong>
+                                <p class="mb-0 mt-1"><%= ann.annotation_text %></p>
+                                <small class="text-muted"><%= new Date(ann.created_at).toLocaleDateString() %></small>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Annotation Modal -->
+    <div class="modal fade" id="annotationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Annotation</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Selected Text</label>
+                        <div class="form-control bg-dark" id="selectedTextDisplay" style="min-height: 50px;"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Annotation</label>
+                        <textarea class="form-control bg-dark" id="annotationText" rows="3" placeholder="Add your annotation..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="submitAnnotation()">Add Annotation</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const socket = io();
+        const roomId = <%= room.id %>;
+        const userId = <%= user.id %>;
+        const contentId = <%= content.id %>;
+        const editor = document.getElementById('editor');
+        let selectedRange = null;
+        let typingTimeout;
+        
+        // Join room
+        socket.emit('join_room', { roomId, userId });
+        
+        // Handle text input with debouncing
+        editor.addEventListener('input', () => {
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                const html = editor.innerHTML;
+                socket.emit('note_edit', {
+                    roomId,
+                    roomContentId: contentId,
+                    edit: {
+                        userId,
+                        type: 'update',
+                        content: html,
+                        timestamp: Date.now()
+                    }
+                });
+            }, 500);
+        });
+        
+        // Receive edits from others
+        socket.on('note_edited', (data) => {
+            if (data.roomContentId === contentId && data.edit.userId !== userId) {
+                // Apply remote edit
+                editor.innerHTML = data.edit.content;
+            }
+        });
+        
+        // Track collaborators
+        socket.on('members_updated', (members) => {
+            const list = document.getElementById('collaboratorsList');
+            list.innerHTML = '';
+            members.forEach(member => {
+                if (member.user_id !== userId) {
+                    const item = document.createElement('div');
+                    item.className = 'collaborator-item';
+                    item.innerHTML = `<span class="presence-indicator"></span>${member.name}`;
+                    list.appendChild(item);
+                } else {
+                    const item = document.createElement('div');
+                    item.className = 'collaborator-item';
+                    item.innerHTML = `<span class="presence-indicator"></span>${member.name} (You)`;
+                    list.appendChild(item);
+                }
+            });
+        });
+        
+        // Annotation functionality
+        editor.addEventListener('mouseup', () => {
+            const selection = window.getSelection();
+            if (selection.toString().trim()) {
+                selectedRange = {
+                    text: selection.toString(),
+                    start: editor.innerText.indexOf(selection.toString()),
+                    end: editor.innerText.indexOf(selection.toString()) + selection.toString().length
+                };
+            }
+        });
+        
+        function addAnnotation() {
+            if (!selectedRange || !selectedRange.text.trim()) {
+                alert('Please select text to annotate');
+                return;
+            }
+            
+            document.getElementById('selectedTextDisplay').textContent = selectedRange.text;
+            const modal = new bootstrap.Modal(document.getElementById('annotationModal'));
+            modal.show();
+        }
+        
+        function submitAnnotation() {
+            const annotationText = document.getElementById('annotationText').value.trim();
+            if (!annotationText) {
+                alert('Please enter an annotation');
+                return;
+            }
+            
+            fetch(`/group-study/content/${contentId}/annotate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    annotationText,
+                    positionStart: selectedRange.start,
+                    positionEnd: selectedRange.end
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error adding annotation');
+                }
+            });
+        }
+        
+        function saveContent() {
+            const html = editor.innerHTML;
+            
+            fetch(`/group-study/room/${roomId}/share`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contentType: 'quicknotes',
+                    contentId: contentId,
+                    title: '<%= content.title || content.topic %>',
+                    topic: '<%= content.topic %>',
+                    gradeLevel: '<%= content.grade_level %>',
+                    contentData: html
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Content saved successfully!');
+                } else {
+                    alert('Error saving content');
+                }
+            });
+        }
+        
+        // Text formatting functions
+        function formatText(command) {
+            document.execCommand(command, false, null);
+            editor.focus();
+        }
+        
+        function insertList(type) {
+            document.execCommand('insertUnorderedList', false, null);
+            editor.focus();
+        }
+        
+        // Receive new annotations
+        socket.on('annotation_added', (annotation) => {
+            const list = document.getElementById('annotationsList');
+            const item = document.createElement('div');
+            item.className = 'annotation-item';
+            item.innerHTML = `
+                <strong>${annotation.user_name || 'Someone'}:</strong>
+                <p class="mb-0 mt-1">${annotation.annotation_text}</p>
+                <small class="text-muted">${new Date(annotation.created_at).toLocaleDateString()}</small>
+            `;
+            list.insertBefore(item, list.firstChild);
+        });
+    </script>
+</body>
+</html>
+

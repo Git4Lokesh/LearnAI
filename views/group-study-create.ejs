@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Study Room - Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+        }
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            min-height: 100vh;
+            color: #F8FAFC;
+        }
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid var(--royal-purple);
+        }
+        .card {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 20px;
+        }
+        .form-control, .form-select {
+            background-color: var(--dark-bg);
+            border: 2px solid var(--dark-border);
+            color: #F8FAFC;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: var(--dark-bg);
+            border-color: var(--royal-purple);
+            color: #F8FAFC;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container">
+            <a class="navbar-brand text-warning fw-bold" href="/">
+                <i class="bi bi-robot me-2"></i>Learn.ai
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link text-light" href="/group-study">Back to Rooms</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 100px; max-width: 800px;">
+        <div class="card shadow-lg">
+            <div class="card-body p-4">
+                <h2 class="mb-4">
+                    <i class="bi bi-plus-circle me-2"></i>Create Study Room
+                </h2>
+                
+                <form action="/group-study/create" method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Room Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required 
+                               placeholder="e.g., Calculus Study Group">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="topic" class="form-label">Topic</label>
+                        <input type="text" class="form-control" id="topic" name="topic" 
+                               placeholder="e.g., Differential Equations">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" 
+                                  placeholder="Describe what this room is for..."></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="privacy" class="form-label">Privacy</label>
+                            <select class="form-select" id="privacy" name="privacy">
+                                <option value="public">Public - Anyone can join</option>
+                                <option value="private">Private - Invite only</option>
+                                <option value="invite-only">Invite Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="maxParticipants" class="form-label">Max Participants</label>
+                            <input type="number" class="form-control" id="maxParticipants" name="maxParticipants" 
+                                   value="50" min="2" max="100">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="studyMaterialType" class="form-label">Study Material Type</label>
+                        <select class="form-select" id="studyMaterialType" name="studyMaterialType">
+                            <option value="">Any</option>
+                            <option value="notes">Notes</option>
+                            <option value="flashcards">Flashcards</option>
+                            <option value="quiz">Quiz</option>
+                            <option value="mixed">Mixed</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="/group-study" class="btn btn-outline-light">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-2"></i>Create Room
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

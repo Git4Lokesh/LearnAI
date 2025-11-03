@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Study Room - Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+        }
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            min-height: 100vh;
+            color: #F8FAFC;
+        }
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid var(--royal-purple);
+        }
+        .card {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 20px;
+        }
+        .form-control {
+            background-color: var(--dark-bg);
+            border: 2px solid var(--dark-border);
+            color: #F8FAFC;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+        .form-control:focus {
+            background-color: var(--dark-bg);
+            border-color: var(--royal-purple);
+            color: #F8FAFC;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container">
+            <a class="navbar-brand text-warning fw-bold" href="/">
+                <i class="bi bi-robot me-2"></i>Learn.ai
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link text-light" href="/group-study">Back to Rooms</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 100px; max-width: 600px;">
+        <div class="card shadow-lg">
+            <div class="card-body p-5 text-center">
+                <div class="mb-4">
+                    <i class="bi bi-box-arrow-in-right display-1 text-warning"></i>
+                </div>
+                <h2 class="mb-4">Join Study Room</h2>
+                <p class="text-muted mb-4">Enter the room code to join a study group</p>
+                
+                <form action="/group-study/join" method="POST">
+                    <div class="mb-4">
+                        <input type="text" class="form-control form-control-lg" id="roomCode" name="roomCode" 
+                               required maxlength="8" placeholder="ROOMCODE" 
+                               style="font-weight: bold;">
+                        <small class="text-muted mt-2 d-block">Enter the 8-character room code</small>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-arrow-right-circle me-2"></i>Join Room
+                        </button>
+                        <a href="/group-study" class="btn btn-outline-light">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Study - Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+        }
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            min-height: 100vh;
+            color: #F8FAFC;
+        }
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid var(--royal-purple);
+        }
+        .room-card {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        .room-card:hover {
+            border-color: var(--royal-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.3);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container">
+            <a class="navbar-brand text-warning fw-bold" href="/">
+                <i class="bi bi-robot me-2"></i>Learn.ai
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link text-light" href="/">Dashboard</a>
+                <a class="nav-link text-light" href="/group-study/create" class="btn btn-primary ms-2">Create Room</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 100px;">
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="display-4 mb-3">
+                    <i class="bi bi-people-fill me-2"></i>Group Study Rooms
+                </h1>
+                <p class="text-light">Collaborate and study together with your peers</p>
+            </div>
+            <div class="col-auto">
+                <a href="/group-study/create" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-plus-circle me-2"></i>Create Room
+                </a>
+                <a href="/group-study/join" class="btn btn-outline-light btn-lg">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Join Room
+                </a>
+            </div>
+        </div>
+
+        <% if (rooms && rooms.length > 0) { %>
+            <div class="row">
+                <% rooms.forEach(room => { %>
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="room-card">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h4 class="mb-1">
+                                        <i class="bi bi-door-open me-2"></i><%= room.name %>
+                                    </h4>
+                                    <p class="text-muted mb-0 small">Code: <code class="bg-dark px-2 py-1 rounded"><%= room.room_code %></code></p>
+                                </div>
+                                <span class="badge bg-<%= room.role === 'owner' ? 'warning' : room.role === 'admin' ? 'info' : 'secondary' %>">
+                                    <%= room.role %>
+                                </span>
+                            </div>
+                            
+                            <% if (room.topic) { %>
+                                <p class="text-light mb-2">
+                                    <i class="bi bi-book me-2"></i><strong>Topic:</strong> <%= room.topic %>
+                                </p>
+                            <% } %>
+                            
+                            <div class="d-flex justify-content-between align-items-center text-muted small mb-3">
+                                <span><i class="bi bi-people me-1"></i><%= room.member_count %> members</span>
+                                <span><i class="bi bi-clock me-1"></i>Joined <%= new Date(room.joined_at).toLocaleDateString() %></span>
+                            </div>
+                            
+                            <a href="/group-study/room/<%= room.room_code %>" class="btn btn-primary w-100">
+                                <i class="bi bi-arrow-right-circle me-2"></i>Enter Room
+                            </a>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+        <% } else { %>
+            <div class="text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+                <h3 class="text-light mb-3">No study rooms yet</h3>
+                <p class="text-muted mb-4">Create your first study room or join an existing one to get started!</p>
+                <a href="/group-study/create" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-plus-circle me-2"></i>Create Room
+                </a>
+                <a href="/group-study/join" class="btn btn-outline-light btn-lg">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Join Room
+                </a>
+            </div>
+        <% } %>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

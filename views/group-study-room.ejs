@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= room.name %> - Group Study</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+        }
+        body {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 25%, #312E81 50%, #7C3AED 100%);
+            min-height: 100vh;
+            color: #F8FAFC;
+        }
+        .navbar-custom {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid var(--royal-purple);
+        }
+        .room-header {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .content-card {
+            background: var(--dark-card);
+            border: 2px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            background: var(--dark-bg);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .chat-message {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--dark-card);
+            border-radius: 8px;
+        }
+        .presence-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10B981;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .presence-indicator.offline {
+            background: #6B7280;
+        }
+        .tab-content {
+            min-height: 400px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+        }
+        .form-control, .form-select {
+            background-color: var(--dark-bg);
+            border: 2px solid var(--dark-border);
+            color: #F8FAFC;
+        }
+        .form-control:focus {
+            border-color: var(--royal-purple);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand text-warning fw-bold" href="/group-study">
+                <i class="bi bi-arrow-left me-2"></i><%= room.name %>
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    Room Code: <code class="bg-dark px-2 py-1 rounded"><%= room.room_code %></code>
+                </span>
+                <a class="nav-link text-light" href="/group-study">All Rooms</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid" style="padding-top: 100px;">
+        <div class="row">
+            <!-- Main Content Area -->
+            <div class="col-lg-8">
+                <div class="room-header">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h2><i class="bi bi-door-open me-2"></i><%= room.name %></h2>
+                            <% if (room.topic) { %>
+                                <p class="text-muted mb-0"><i class="bi bi-book me-2"></i><%= room.topic %></p>
+                            <% } %>
+                        </div>
+                        <div class="text-end">
+                            <div class="mb-2">
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-people me-1"></i><%= room.members.length %> members
+                                </span>
+                            </div>
+                            <div id="activeMembers">
+                                <small class="text-muted">Active: <span id="activeCount">0</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    <% if (room.description) { %>
+                        <p class="text-light"><%= room.description %></p>
+                    <% } %>
+                </div>
+
+                <!-- Tabs -->
+                <ul class="nav nav-tabs mb-3" id="roomTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="content-tab" data-bs-toggle="tab" data-bs-target="#content" type="button">
+                            <i class="bi bi-folder me-2"></i>Shared Content
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="progress-tab" data-bs-toggle="tab" data-bs-target="#progress" type="button">
+                            <i class="bi bi-graph-up me-2"></i>Progress
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button">
+                            <i class="bi bi-calendar-event me-2"></i>Sessions
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="roomTabContent">
+                    <!-- Shared Content Tab -->
+                    <div class="tab-pane fade show active" id="content" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4>Shared Study Materials</h4>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#shareContentModal">
+                                <i class="bi bi-plus-circle me-2"></i>Share Content
+                            </button>
+                        </div>
+                        <div id="sharedContent">
+                            <% if (content && content.length > 0) { %>
+                                <% content.forEach(item => { %>
+                                    <div class="content-card" data-content-id="<%= item.id %>">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <h5>
+                                                    <i class="bi bi-<%= item.content_type === 'quicknotes' ? 'file-text' : item.content_type === 'flashcards' ? 'card-text' : 'question-circle' %> me-2"></i>
+                                                    <%= item.title || item.topic %>
+                                                </h5>
+                                                <small class="text-muted">
+                                                    Shared by <%= item.shared_by_name %> • 
+                                                    <%= new Date(item.created_at).toLocaleDateString() %>
+                                                </small>
+                                            </div>
+                                            <span class="badge bg-info"><%= item.content_type %></span>
+                                        </div>
+                                        <div class="mt-3">
+                                            <button class="btn btn-sm btn-outline-light" onclick="viewContent(<%= item.id %>, '<%= item.content_type %>')">
+                                                <i class="bi bi-eye me-2"></i>View
+                                            </button>
+                                            <% if (item.content_type === 'quiz' || item.content_type === 'flashcards') { %>
+                                                <button class="btn btn-sm btn-outline-success" onclick="startSyncedSession(<%= item.id %>, '<%= item.content_type %>')">
+                                                    <i class="bi bi-play-circle me-2"></i>Start Session
+                                                </button>
+                                            <% } %>
+                                            <% if (item.content_type === 'quiz') { %>
+                                                <button class="btn btn-sm btn-outline-warning" onclick="viewLeaderboard(<%= item.id %>)">
+                                                    <i class="bi bi-trophy me-2"></i>Leaderboard
+                                                </button>
+                                            <% } %>
+                                            <% if (item.content_type === 'quicknotes') { %>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="editContent(<%= item.id %>)">
+                                                    <i class="bi bi-pencil-square me-2"></i>Edit
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-info" onclick="viewAnnotations(<%= item.id %>)">
+                                                    <i class="bi bi-sticky me-2"></i>Annotations
+                                                </button>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                <% }); %>
+                            <% } else { %>
+                                <div class="text-center py-5">
+                                    <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                                    <p class="text-muted">No shared content yet. Be the first to share!</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Progress Tab -->
+                    <div class="tab-pane fade" id="progress" role="tabpanel">
+                        <h4 class="mb-4">Group Progress Statistics</h4>
+                        
+                        <!-- User Streaks (loaded via API) -->
+                        <div id="userStreaks" class="content-card mb-4" style="display: none;">
+                            <h5><i class="bi bi-fire me-2"></i>Your Study Streak</h5>
+                            <div id="streakDisplay"></div>
+                        </div>
+                        
+                        <% if (progressStats && progressStats.length > 0) { %>
+                            <div class="table-responsive mb-4">
+                                <table class="table table-dark">
+                                    <thead>
+                                        <tr>
+                                            <th>Topic/Skill</th>
+                                            <th>Participants</th>
+                                            <th>Avg Mastery</th>
+                                            <th>Total Questions</th>
+                                            <th>Accuracy</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% progressStats.forEach(stat => { %>
+                                            <tr>
+                                                <td><%= stat.skill_id %></td>
+                                                <td><%= stat.participant_count %></td>
+                                                <td><%= (stat.avg_mastery_percent || 0).toFixed(1) %>%</td>
+                                                <td><%= stat.total_questions || 0 %></td>
+                                                <td>
+                                                    <% const accuracy = stat.total_questions > 0 ? (stat.total_correct / stat.total_questions * 100).toFixed(1) : 0 %>
+                                                    <%= accuracy %>%
+                                                </td>
+                                            </tr>
+                                        <% }); %>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Detailed Analytics Button -->
+                            <button class="btn btn-primary" onclick="loadDetailedAnalytics()">
+                                <i class="bi bi-graph-up-arrow me-2"></i>View Detailed Analytics
+                            </button>
+                        <% } else { %>
+                            <div class="text-center py-5">
+                                <i class="bi bi-graph-up display-4 text-muted mb-3"></i>
+                                <p class="text-muted">No progress data yet. Start taking quizzes to see progress!</p>
+                            </div>
+                        <% } %>
+                        
+                        <!-- Analytics Modal will be loaded here -->
+                        <div id="analyticsModalContainer"></div>
+                    </div>
+
+                    <!-- Sessions Tab -->
+                    <div class="tab-pane fade" id="sessions" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4>Study Sessions</h4>
+                            <div>
+                                <button class="btn btn-outline-info btn-sm me-2" onclick="checkReminders()" title="Check for upcoming sessions">
+                                    <i class="bi bi-bell me-2"></i>Reminders
+                                </button>
+                                <% if (userRole === 'owner' || userRole === 'admin') { %>
+                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                                        <i class="bi bi-plus-circle me-2"></i>Create Session
+                                    </button>
+                                <% } %>
+                            </div>
+                        </div>
+                        
+                        <!-- Reminders Banner -->
+                        <div id="remindersBanner" class="content-card mb-3" style="display: none; background: rgba(245, 158, 11, 0.2); border-color: var(--royal-gold);">
+                            <h6><i class="bi bi-bell-fill me-2"></i>Upcoming Sessions</h6>
+                            <div id="remindersList"></div>
+                        </div>
+                        
+                        <div id="sessionsList">
+                            <% if (sessions && sessions.length > 0) { %>
+                                <% sessions.forEach(session => { %>
+                                    <div class="content-card">
+                                        <h5><%= session.title %></h5>
+                                        <% if (session.description) { %>
+                                            <p class="text-muted"><%= session.description %></p>
+                                        <% } %>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="bi bi-calendar me-1"></i><%= new Date(session.scheduled_at).toLocaleString() %> • 
+                                                <i class="bi bi-clock me-1"></i><%= session.duration_minutes %> min • 
+                                                <i class="bi bi-people me-1"></i><%= session.participant_count %> participants
+                                            </small>
+                                            <span class="badge bg-<%= session.status === 'active' ? 'success' : session.status === 'completed' ? 'secondary' : 'info' %>">
+                                                <%= session.status %>
+                                            </span>
+                                        </div>
+                                        <% if (session.status === 'scheduled') { %>
+                                            <% if (userRole === 'owner' || userRole === 'admin' || session.created_by === user.id) { %>
+                                                <button class="btn btn-sm btn-success mt-2" onclick="startSession(<%= session.id %>)">
+                                                    <i class="bi bi-play-circle me-2"></i>Start Session
+                                                </button>
+                                            <% } %>
+                                            <button class="btn btn-sm btn-outline-light mt-2" onclick="joinSession(<%= session.id %>)">
+                                                <i class="bi bi-check-circle me-2"></i>Join Session
+                                            </button>
+                                        <% } else if (session.status === 'active') { %>
+                                            <a href="/group-study/session/<%= session.id %>" class="btn btn-sm btn-success mt-2">
+                                                <i class="bi bi-arrow-right-circle me-2"></i>Enter Session
+                                            </a>
+                                            <% if (userRole === 'owner' || userRole === 'admin' || session.created_by === user.id) { %>
+                                                <button class="btn btn-sm btn-danger mt-2" onclick="endSession(<%= session.id %>)">
+                                                    <i class="bi bi-stop-circle me-2"></i>End Session
+                                                </button>
+                                            <% } %>
+                                        <% } else if (session.status === 'completed') { %>
+                                            <button class="btn btn-sm btn-outline-info mt-2" onclick="viewSessionSummary(<%= session.id %>)">
+                                                <i class="bi bi-file-text me-2"></i>View Summary
+                                            </button>
+                                        <% } %>
+                                    </div>
+                                <% }); %>
+                            <% } else { %>
+                                <div class="text-center py-5">
+                                    <i class="bi bi-calendar display-4 text-muted mb-3"></i>
+                                    <p class="text-muted">No study sessions scheduled yet.</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar: Chat & Members -->
+            <div class="col-lg-4">
+                <!-- Members List -->
+                <div class="content-card mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="bi bi-people me-2"></i>Members</h5>
+                        <% if (userRole === 'owner' || userRole === 'admin') { %>
+                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#inviteModal">
+                                <i class="bi bi-person-plus"></i>
+                            </button>
+                        <% } %>
+                    </div>
+                    <div id="membersList">
+                        <% room.members.forEach(member => { %>
+                            <div class="d-flex justify-content-between align-items-center mb-2 member-item" data-user-id="<%= member.user_id %>">
+                                <div class="flex-grow-1">
+                                    <span class="presence-indicator"></span>
+                                    <%= member.name %>
+                                    <% if (member.user_id === user.id) { %>
+                                        <small class="text-muted">(You)</small>
+                                    <% } %>
+                                    <span class="badge bg-<%= member.role === 'owner' ? 'warning' : member.role === 'admin' ? 'info' : 'secondary' %> ms-2">
+                                        <%= member.role %>
+                                    </span>
+                                </div>
+                                <% if ((userRole === 'owner' || userRole === 'admin') && member.user_id !== user.id && member.role !== 'owner') { %>
+                                    <div class="btn-group btn-group-sm">
+                                        <% if (userRole === 'owner' && member.role === 'member') { %>
+                                            <button class="btn btn-outline-info btn-sm" onclick="promoteUser(<%= member.user_id %>)" title="Promote to Admin">
+                                                <i class="bi bi-arrow-up-circle"></i>
+                                            </button>
+                                        <% } %>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="removeMember(<%= member.user_id %>)" title="Remove">
+                                            <i class="bi bi-person-x"></i>
+                                        </button>
+                                    </div>
+                                <% } %>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <!-- Chat -->
+                <div class="content-card">
+                    <h5><i class="bi bi-chat-dots me-2"></i>Chat</h5>
+                    <div class="chat-container" id="chatMessages">
+                        <% chatMessages.forEach(msg => { %>
+                            <div class="chat-message">
+                                <strong><%= msg.user_name %>:</strong>
+                                <p class="mb-0 mt-1"><%= msg.message %></p>
+                                <small class="text-muted"><%= new Date(msg.created_at).toLocaleTimeString() %></small>
+                            </div>
+                        <% }); %>
+                    </div>
+                    <div id="typingIndicator" class="text-muted small px-2" style="display: none;"></div>
+                    <div class="input-group mt-3">
+                        <input type="text" class="form-control" id="chatInput" placeholder="Type a message..." 
+                               onkeypress="handleChatKeyPress(event)" oninput="handleTyping()">
+                        <button class="btn btn-primary" onclick="sendMessage()">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Content Modal -->
+    <div class="modal fade" id="shareContentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Share Content to Room</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="shareContentForm">
+                        <input type="hidden" id="shareRoomId" value="<%= room.id %>">
+                        <div class="mb-3">
+                            <label class="form-label">Content Type</label>
+                            <select class="form-select" id="shareContentType" required>
+                                <option value="">Select type...</option>
+                                <option value="quicknotes">Quick Notes</option>
+                                <option value="flashcards">Flashcards</option>
+                                <option value="quiz">Quiz</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="shareTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Topic</label>
+                            <input type="text" class="form-control" id="shareTopic">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Content (JSON for flashcards/quiz, HTML for notes)</label>
+                            <textarea class="form-control" id="shareContentData" rows="10" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Share</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Session Modal -->
+    <div class="modal fade" id="createSessionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Study Session</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createSessionForm">
+                        <input type="hidden" id="sessionRoomId" value="<%= room.id %>">
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="sessionTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="sessionDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Scheduled Date & Time</label>
+                            <input type="datetime-local" class="form-control" id="sessionScheduledAt" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Duration (minutes)</label>
+                            <input type="number" class="form-control" id="sessionDuration" value="60" min="15" max="480">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Session</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invite User Modal -->
+    <div class="modal fade" id="inviteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Invite User to Room</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="inviteForm">
+                        <input type="hidden" id="inviteRoomId" value="<%= room.id %>">
+                        <div class="mb-3">
+                            <label class="form-label">User Email</label>
+                            <input type="email" class="form-control" id="inviteEmail" required placeholder="user@example.com">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Send Invite</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Settings Modal -->
+    <div class="modal fade" id="roomSettingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">Room Settings</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <% if (userRole === 'owner') { %>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-danger" onclick="deleteRoomConfirm()">
+                                <i class="bi bi-trash me-2"></i>Delete Room
+                            </button>
+                        </div>
+                    <% } else { %>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-danger" onclick="leaveRoomConfirm()">
+                                <i class="bi bi-box-arrow-right me-2"></i>Leave Room
+                            </button>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const socket = io();
+        const roomId = <%= room.id %>;
+        const userId = <%= user.id %>;
+        
+        // Join room socket room
+        socket.emit('join_room', { roomId, userId });
+        
+        socket.on('joined_room', (data) => {
+            console.log('Joined room:', data);
+        });
+        
+        socket.on('members_updated', (members) => {
+            document.getElementById('activeCount').textContent = members.length;
+            // Update presence indicators
+            const membersList = document.getElementById('membersList');
+            // Could update UI here with active members
+        });
+        
+        socket.on('chat_message', (message) => {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `
+                <strong>${message.user_name}:</strong>
+                <p class="mb-0 mt-1">${message.message}</p>
+                <small class="text-muted">${new Date(message.created_at).toLocaleTimeString()}</small>
+            `;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+        
+        socket.on('content_shared', (content) => {
+            // Reload page or add content dynamically
+            location.reload();
+        });
+        
+        socket.on('leaderboard_updated', (data) => {
+            console.log('Leaderboard updated:', data);
+            // Could update leaderboard UI here
+        });
+        
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (message) {
+                socket.emit('chat_message', { roomId, userId, message });
+                input.value = '';
+            }
+        }
+        
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        document.getElementById('shareContentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const roomId = document.getElementById('shareRoomId').value;
+            const contentType = document.getElementById('shareContentType').value;
+            const title = document.getElementById('shareTitle').value;
+            const topic = document.getElementById('shareTopic').value;
+            const contentData = document.getElementById('shareContentData').value;
+            
+            try {
+                const response = await fetch(`/group-study/room/${roomId}/share`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contentType, contentId: null, title, topic, gradeLevel: '', contentData })
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error sharing content');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error sharing content');
+            }
+        });
+        
+        document.getElementById('createSessionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const roomId = document.getElementById('sessionRoomId').value;
+            const title = document.getElementById('sessionTitle').value;
+            const description = document.getElementById('sessionDescription').value;
+            const scheduledAt = document.getElementById('sessionScheduledAt').value;
+            const durationMinutes = document.getElementById('sessionDuration').value;
+            
+            try {
+                const response = await fetch('/group-study/session/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomId, title, description, scheduledAt, durationMinutes })
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error creating session');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error creating session');
+            }
+        });
+        
+        function viewContent(contentId, contentType) {
+            window.location.href = `/group-study/content/${contentId}`;
+        }
+        
+        function editContent(contentId) {
+            window.location.href = `/group-study/content/${contentId}/edit`;
+        }
+        
+        function viewLeaderboard(contentId) {
+            fetch(`/group-study/quiz/leaderboard/${contentId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.leaderboard && data.leaderboard.length > 0) {
+                        let html = '<h5>Leaderboard</h5><ol class="list-group list-group-numbered">';
+                        data.leaderboard.forEach((entry, idx) => {
+                            html += `
+                                <li class="list-group-item bg-dark text-light d-flex justify-content-between">
+                                    <span>${entry.user_name}</span>
+                                    <span class="badge bg-warning">${entry.score}/${entry.total_questions}</span>
+                                </li>
+                            `;
+                        });
+                        html += '</ol>';
+                        
+                        // Show in modal
+                        const modal = document.createElement('div');
+                        modal.className = 'modal fade';
+                        modal.innerHTML = `
+                            <div class="modal-dialog">
+                                <div class="modal-content bg-dark text-light">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Quiz Leaderboard</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">${html}</div>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(modal);
+                        const bsModal = new bootstrap.Modal(modal);
+                        bsModal.show();
+                        modal.addEventListener('hidden.bs.modal', () => modal.remove());
+                    } else {
+                        alert('No leaderboard data yet');
+                    }
+                });
+        }
+        
+        function joinSession(sessionId) {
+            socket.emit('session_join', { sessionId, userId });
+            window.location.href = `/group-study/session/${sessionId}`;
+        }
+        
+        function startSession(sessionId) {
+            fetch(`/group-study/sessions/${sessionId}/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error starting session');
+                }
+            });
+        }
+        
+        function endSession(sessionId) {
+            if (confirm('Are you sure you want to end this session?')) {
+                fetch(`/group-study/sessions/${sessionId}/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error ending session');
+                    }
+                });
+            }
+        }
+        
+        function viewSessionSummary(sessionId) {
+            fetch(`/group-study/sessions/${sessionId}/summary`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.summary) {
+                        const summary = data.summary;
+                        const summaryHtml = `
+                            <h5>Session Summary</h5>
+                            <p><strong>Title:</strong> ${summary.session.title}</p>
+                            <p><strong>Duration:</strong> ${summary.duration || 'N/A'} minutes</p>
+                            <p><strong>Participants:</strong> ${summary.participants}</p>
+                            <p><strong>Messages:</strong> ${summary.messageCount}</p>
+                        `;
+                        // Show in modal or alert
+                        alert(summaryHtml.replace(/<[^>]*>/g, ''));
+                    }
+                });
+        }
+        
+        // Typing indicators
+        let typingTimeout;
+        const typingUsers = new Set();
+        
+        function handleTyping() {
+            socket.emit('typing_start', { roomId, userId, userName: '<%= user.name %>' });
+            
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                socket.emit('typing_stop', { roomId, userId });
+            }, 3000);
+        }
+        
+        socket.on('user_typing', (data) => {
+            if (data.userId !== userId) {
+                typingUsers.add(data.userName);
+                updateTypingIndicator();
+            }
+        });
+        
+        socket.on('user_stopped_typing', (data) => {
+            typingUsers.clear();
+            updateTypingIndicator();
+        });
+        
+        function updateTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (typingUsers.size > 0) {
+                const names = Array.from(typingUsers).join(', ');
+                indicator.textContent = `${names} ${typingUsers.size === 1 ? 'is' : 'are'} typing...`;
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+        
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Member management
+        function inviteUser() {
+            const form = document.getElementById('inviteForm');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('inviteEmail').value;
+                const roomId = document.getElementById('inviteRoomId').value;
+                
+                try {
+                    const response = await fetch(`/group-study/room/${roomId}/invite`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        const data = await response.json();
+                        alert(data.error || 'Error inviting user');
+                    }
+                } catch (error) {
+                    alert('Error inviting user');
+                }
+            });
+        }
+        
+        inviteUser();
+        
+        function removeMember(targetUserId) {
+            if (confirm('Are you sure you want to remove this member?')) {
+                fetch(`/group-study/room/${roomId}/member/${targetUserId}`, {
+                    method: 'DELETE'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.error || 'Error removing member');
+                    }
+                });
+            }
+        }
+        
+        function promoteUser(targetUserId) {
+            if (confirm('Promote this user to admin?')) {
+                fetch(`/group-study/room/${roomId}/promote/${targetUserId}`, {
+                    method: 'POST'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.error || 'Error promoting user');
+                    }
+                });
+            }
+        }
+        
+        function leaveRoomConfirm() {
+            if (confirm('Are you sure you want to leave this room?')) {
+                fetch(`/group-study/room/${roomId}/leave`, {
+                    method: 'DELETE'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/group-study';
+                    } else {
+                        alert(data.error || 'Error leaving room');
+                    }
+                });
+            }
+        }
+        
+        function deleteRoomConfirm() {
+            if (confirm('Are you sure you want to delete this room? This action cannot be undone.')) {
+                fetch(`/group-study/room/${roomId}`, {
+                    method: 'DELETE'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/group-study';
+                    } else {
+                        alert(data.error || 'Error deleting room');
+                    }
+                });
+            }
+        }
+        
+        // WebSocket event handlers for member updates
+        socket.on('member_added', (data) => {
+            location.reload();
+        });
+        
+        socket.on('member_removed', (data) => {
+            if (data.userId === userId) {
+                window.location.href = '/group-study';
+            } else {
+                location.reload();
+            }
+        });
+        
+        socket.on('member_promoted', (data) => {
+            location.reload();
+        });
+        
+        socket.on('room_deleted', () => {
+            alert('Room has been deleted');
+            window.location.href = '/group-study';
+        });
+        
+        // Start synchronized session
+        function startSyncedSession(contentId, contentType) {
+            // Create a session for this content
+            window.location.href = `/group-study/content/${contentId}/session?type=${contentType}`;
+        }
+        
+        // View annotations
+        function viewAnnotations(contentId) {
+            fetch(`/group-study/content/${contentId}/annotations`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.annotations && data.annotations.length > 0) {
+                        let annotationsHtml = '<h5>Annotations</h5><ul>';
+                        data.annotations.forEach(ann => {
+                            annotationsHtml += `<li><strong>${ann.user_name}:</strong> ${ann.annotation_text}</li>`;
+                        });
+                        annotationsHtml += '</ul>';
+                        alert(annotationsHtml.replace(/<[^>]*>/g, ''));
+                    } else {
+                        alert('No annotations yet');
+                    }
+                });
+        }
+        
+        // Enhanced content viewing
+        socket.on('annotation_added', (annotation) => {
+            // Could show a notification or update annotation list
+            console.log('New annotation:', annotation);
+        });
+        
+        socket.on('position_synced', (data) => {
+            // Handle position sync for sessions
+            console.log('Position synced:', data);
+        });
+        
+        socket.on('answer_submitted', (data) => {
+            // Handle answer submissions in sessions
+            console.log('Answer submitted:', data);
+        });
+        
+        socket.on('session_started', (session) => {
+            // Reload to show active session
+            location.reload();
+        });
+        
+        socket.on('session_ended', (session) => {
+            // Reload to show completed session
+            location.reload();
+        });
+        
+        // Load user streaks on progress tab
+        function loadUserStreaks() {
+            fetch(`/group-study/room/${roomId}/analytics/user/${userId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.streaks && data.streaks.current_streak > 0) {
+                        const streakDiv = document.getElementById('streakDisplay');
+                        streakDiv.innerHTML = `
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-fire text-warning me-2" style="font-size: 2rem;"></i>
+                                <div>
+                                    <h3 class="mb-0">${data.streaks.current_streak} days</h3>
+                                    <small class="text-muted">Current streak</small>
+                                </div>
+                            </div>
+                        `;
+                        document.getElementById('userStreaks').style.display = 'block';
+                    }
+                });
+        }
+        
+        // Load detailed analytics
+        function loadDetailedAnalytics() {
+            fetch(`/group-study/room/${roomId}/analytics`)
+                .then(res => res.json())
+                .then(data => {
+                    const analytics = data.analytics;
+                    const streaks = data.streaks;
+                    
+                    let html = `
+                        <div class="modal fade" id="analyticsModal" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content bg-dark text-light">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Room Analytics</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row mb-4">
+                                            <div class="col-md-6">
+                                                <div class="content-card">
+                                                    <h6>Participants</h6>
+                                                    <h3>${analytics.total_participants || 0}</h3>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="content-card">
+                                                    <h6>Skills Tracked</h6>
+                                                    <h3>${analytics.skills_tracked || 0}</h3>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="content-card">
+                                                    <h6>Total Questions</h6>
+                                                    <h3>${analytics.total_questions || 0}</h3>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="content-card">
+                                                    <h6>Avg Mastery</h6>
+                                                    <h3>${analytics.avg_mastery || 0}%</h3>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="content-card">
+                                            <h6>Your Streak</h6>
+                                            <p>${streaks.current_streak || 0} days${streaks.last_study_date ? ` (Last: ${new Date(streaks.last_study_date).toLocaleDateString()})` : ''}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('analyticsModalContainer').innerHTML = html;
+                    const modal = new bootstrap.Modal(document.getElementById('analyticsModal'));
+                    modal.show();
+                });
+        }
+        
+        // Load streaks when progress tab is shown
+        document.getElementById('progress-tab').addEventListener('shown.bs.tab', () => {
+            loadUserStreaks();
+        });
+        
+        // Check for session reminders
+        function checkReminders() {
+            fetch('/group-study/reminders')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.sessions && data.sessions.length > 0) {
+                        const banner = document.getElementById('remindersBanner');
+                        const list = document.getElementById('remindersList');
+                        
+                        let html = '<ul class="mb-0">';
+                        data.sessions.forEach(session => {
+                            const timeUntil = new Date(session.scheduled_at) - new Date();
+                            const hours = Math.floor(timeUntil / (1000 * 60 * 60));
+                            const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
+                            
+                            html += `
+                                <li class="mb-2">
+                                    <strong>${session.title}</strong> - 
+                                    ${hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`} from now
+                                    <a href="/group-study/session/${session.id}" class="btn btn-sm btn-outline-light ms-2">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </a>
+                                </li>
+                            `;
+                        });
+                        html += '</ul>';
+                        
+                        list.innerHTML = html;
+                        banner.style.display = 'block';
+                    } else {
+                        alert('No upcoming sessions in the next 24 hours');
+                    }
+                });
+        }
+        
+        // Auto-check reminders when sessions tab is shown
+        document.getElementById('sessions-tab').addEventListener('shown.bs.tab', () => {
+            checkReminders();
+        });
+    </script>
+</body>
+</html>
+
