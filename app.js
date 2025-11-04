@@ -210,6 +210,12 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // Routes
+
+// Handle favicon requests to prevent 404 errors
+app.get("/favicon.ico", (req, res) => {
+    res.status(204).end(); // No Content - prevents 404 error
+});
+
 app.get("/", ensureAuthenticated, async (req, res) => {
     try {
         const response = await db.query(`
@@ -1541,6 +1547,52 @@ app.post("/api/chat", ensureAuthenticated, async (req, res) => {
     } catch (error) {
         console.error('Chat API error:', error);
         res.status(500).json({ error: 'Failed to get AI response' });
+    }
+});
+
+// Translation API endpoint
+app.post("/api/translate", async (req, res) => {
+    try {
+        const { text, targetLanguage, sourceLanguage = 'en' } = req.body;
+        
+        if (!text) {
+            return res.status(400).json({ error: 'Text is required' });
+        }
+        
+        if (!targetLanguage) {
+            return res.status(400).json({ error: 'Target language is required' });
+        }
+        
+        const { translateText } = await import('./services/translationService.js');
+        const translatedText = await translateText(text, targetLanguage, sourceLanguage);
+        
+        res.json({ translatedText });
+    } catch (error) {
+        console.error('Translation API error:', error);
+        res.status(500).json({ error: 'Failed to translate text' });
+    }
+});
+
+// Batch translation API endpoint
+app.post("/api/translate/batch", async (req, res) => {
+    try {
+        const { texts, targetLanguage, sourceLanguage = 'en' } = req.body;
+        
+        if (!texts || !Array.isArray(texts)) {
+            return res.status(400).json({ error: 'Texts array is required' });
+        }
+        
+        if (!targetLanguage) {
+            return res.status(400).json({ error: 'Target language is required' });
+        }
+        
+        const { translateMultiple } = await import('./services/translationService.js');
+        const translatedTexts = await translateMultiple(texts, targetLanguage, sourceLanguage);
+        
+        res.json({ translatedTexts });
+    } catch (error) {
+        console.error('Batch translation API error:', error);
+        res.status(500).json({ error: 'Failed to translate texts' });
     }
 });
 

@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "C:\\Python314\\python.exe",
+    "python.analysis.extraPaths": [
+        "C:\\Users\\sanga\\AppData\\Roaming\\Python\\Python314\\site-packages"
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "python.languageServer": "None"
+}
+

@@ -1,9 +1,30 @@
 from fastapi import FastAPI
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Dict, Optional
 import math
 
 app = FastAPI(title="BKT Service", version="0.1.0")
+
+# Handle favicon requests to prevent 404 errors
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)  # No Content - prevents 404 error
+
+# Handle root path requests
+@app.get("/")
+def root():
+    return {
+        "service": "BKT Service",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+# Handle Chrome DevTools auto-discovery requests
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+def chrome_devtools():
+    return Response(status_code=204)  # No Content - prevents 404 error
 
 # Simple in-memory store: { userId: { skillId: state } }
 # State per skill stores mastery probability and parameters
