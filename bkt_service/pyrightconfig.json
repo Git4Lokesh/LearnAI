@@ -1,0 +1,16 @@
+{
+    "include": [
+        "."
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "**/venv"
+    ],
+    "extraPaths": [
+        "C:\\Users\\sanga\\AppData\\Roaming\\Python\\Python314\\site-packages"
+    ],
+    "pythonVersion": "3.14",
+    "typeCheckingMode": "off"
+}
+
+
