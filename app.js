@@ -40,16 +40,16 @@ const io = new SocketIOServer(httpServer, {
 const port = process.env.PORT || 3000;
 const saltRounds = 12;
 
-// Database configuration - works for both local and production
+
 const db = new pg.Client({
-  host:  'localhost',        // e.g., 127.0.0.1 [3]
-  port: 5432,       // default 5432 [3]
-  user: 'postgres',         // local superuser often 'postgres' [7]
-  password:  'postgrespass1!',  // set from local setup [7]
-  database: 'Content Storage',     // target DB name [3]
+  host:  'localhost',        
+  port: 5432,       
+  user: 'postgres',         
+  password:  process.env.db_password,  
+  database: 'Content Storage',     
 });
 
-// connect once at startup
+
 await db.connect();
 
 marked.setOptions({
@@ -213,7 +213,7 @@ function ensureAuthenticated(req, res, next) {
 
 // Handle favicon requests to prevent 404 errors
 app.get("/favicon.ico", (req, res) => {
-    res.status(204).end(); // No Content - prevents 404 error
+    res.status(204).end(); 
 });
 
 app.get("/", ensureAuthenticated, async (req, res) => {
