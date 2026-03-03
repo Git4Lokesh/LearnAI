@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import bodyParser from "body-parser";
 import express from "express";
 import { marked } from "marked";
@@ -42,6 +43,14 @@ const io = new SocketIOServer(httpServer, {
 const port = process.env.PORT || 3000;
 const saltRounds = 12;
 
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+async function geminiGenerate(systemPrompt, userPrompt) {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: systemPrompt });
+    const result = await model.generateContent(userPrompt);
+    return result.response.text();
+}
 
 const db = new pg.Client({
   host:  'localhost',        
@@ -156,13 +165,7 @@ Requirements:
 - Use clear, grade-appropriate language
 - If mathematical, use $$...$$ notation`
     };
-    const resp = await axios.post("https://api.perplexity.ai/chat/completions", {
-        model: "sonar-pro",
-        messages: [system, user]
-    }, {
-        headers: { Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}` }
-    });
-    const content = resp.data.choices[0].message.content;
+    const content = await geminiGenerate(system.content, user.content);
     let parsed;
     try {
         parsed = JSON.parse(content);
@@ -415,45 +418,12 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
         
         if (type === "quicknotes") {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educator. Create study materials in HTML format with proper tags. Never show your research process or mention search results. Start directly with the educational content. For ALL mathematical expressions, use proper notation enclosed in $$ (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Write extremely thorough study notes on ${topic} for ${level} level students. The student should be able to revise this for exams.
-
-Format Requirements:
-- Start with a clear definition
-- Use HTML tags: <h1>, <h2>, <h3> for headings
-- Use <strong> for bold, <em> for italic
-- Use <p> for paragraphs and <br> for line breaks
-- Use <ul><li> for bullet points
-- Add practical examples
-- No meta-commentary about sources
-- No phrases like "based on the search results"
-- If mathematical in nature, include example problems with solutions formatted in $$...$$ notation
-- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$E = mc^2$$)
-
-Topic: ${topic}
-Level: ${level}`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                req.session.content = response.data.choices[0].message.content
-                res.render("quicknotes.ejs", {
-                    topic: topic,
-                    gradeLevel: level,
-                    content: response.data.choices[0].message.content
-                });
+                const noteContent = await geminiGenerate(
+                    "You are an expert educator. Create study materials in HTML format with proper tags. Start directly with the educational content. For ALL mathematical expressions, use proper notation enclosed in $$ (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$)",
+                    `Write extremely thorough study notes on ${topic} for ${level} level students. The student should be able to revise this for exams.\n\nFormat Requirements:\n- Start with a clear definition\n- Use HTML tags: <h1>, <h2>, <h3> for headings\n- Use <strong> for bold, <em> for italic\n- Use <p> for paragraphs and <br> for line breaks\n- Use <ul><li> for bullet points\n- Add practical examples\n- If mathematical in nature, include example problems with solutions formatted in $$...$$ notation\n- ALL mathematical expressions MUST use proper notation enclosed in $$\n\nTopic: ${topic}\nLevel: ${level}`
+                );
+                req.session.content = noteContent;
+                res.render("quicknotes.ejs", { topic, gradeLevel: level, content: noteContent });
                 
             } catch (error) {
                 console.error("Quick notes error:", error.message);
@@ -462,32 +432,12 @@ Level: ${level}`
         }
         else if (type === "flashcards") {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    "model": "sonar-pro",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Create flashcards in JSON format. Return only a JSON array of objects with 'question' and 'answer' properties. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\frac{1}{2}$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Generate 10 flashcards for ${topic} at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}].
-
-Requirements:
-- No meta-commentary about sources
-- No phrases like "based on the search results"
-- Include mathematical concepts in $$...$$ notation where needed
-- ALL mathematical expressions MUST use proper notation enclosed in $$`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
-                        "Content-Type": "application/json"
-                    }
-                });
-                
-                const flashcards = JSON.parse(response.data.choices[0].message.content);
+                const fcRaw = await geminiGenerate(
+                    "Create flashcards in JSON format. Return only a JSON array of objects with 'question' and 'answer' properties. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\frac{1}{2}$$)",
+                    `Generate 10 flashcards for ${topic} at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}]. Return only valid JSON, no markdown fences.`
+                );
+                const fcClean = fcRaw.replace(/```json\n?|```/g, '').trim();
+                const flashcards = JSON.parse(fcClean);
                 
                 req.session.flashcards = flashcards;
                 req.session.topic = topic;
@@ -508,50 +458,11 @@ Requirements:
         } 
         else {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or formatting. Each question must have exactly 4 distinct, plausible options with one clearly correct answer. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$x^2 + 5x + 6$$)"
-                        },
-                        {
-                            "role": "user", 
-                            "content": `Create a 10-question multiple choice quiz about ${topic} for ${level} school students.
-
-Requirements:
-- Format: JSON array only, no other text
-- Each question must have: question, option1, option2, option3, option4, answer
-- Answer field must specify which option is correct (e.g., "option2")
-- All options should be plausible but only one correct
-- Questions should test understanding, not just memorization
-- Use clear, grade-appropriate language
-- ONLY IF the topic is mathematical in nature or could have calculation based questions, include 3-4 questions which involve calculations
-- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\sqrt{25} = 5$$)
-
-Example format:
-[
-    {
-        "question": "What is the discriminant of the quadratic equation $$ax^2 + bx + c = 0$$?",
-        "option1": "$$b^2 - 4ac$$",
-        "option2": "$$-b \\pm \\sqrt{b^2 - 4ac}$$", 
-        "option3": "$$4ac - b^2$$",
-        "option4": "$$a^2 + b^2 + c^2$$",
-        "answer": "option1"
-    }
-]
-
-Topic: ${topic}
-Grade Level: ${level}`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                const content = JSON.parse(response.data.choices[0].message.content);
+                const quizRaw = await geminiGenerate(
+                    "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or markdown fences. Each question must have exactly 4 distinct, plausible options with one clearly correct answer. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Create a 10-question multiple choice quiz about ${topic} for ${level} school students.\n\nRequirements:\n- Format: JSON array only, no other text, no markdown\n- Each question must have: question, option1, option2, option3, option4, answer\n- Answer field must specify which option is correct (e.g., "option2")\n- ALL mathematical expressions MUST use proper notation enclosed in $$\n\nTopic: ${topic}\nGrade Level: ${level}`
+                );
+                const content = JSON.parse(quizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = topic;
                 req.session.gradeLevel = level;
                 req.session.content = content;
@@ -586,81 +497,18 @@ Grade Level: ${level}`
             const extractedText = await extractTextFromPDF(req.file.buffer, req.file.originalname);
             
             if (type === "quicknotes") {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educator specializing in analyzing comprehensive academic course materials. Transform content into well-organized study notes with HTML formatting. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$F = ma$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Transform the following comprehensive course material into detailed study notes for ${level} level students:
-
-COMPREHENSIVE COURSE MATERIAL:
-${extractedText}
-
-Create study notes with these requirements:
-- Use HTML formatting: <h2>, <h3>, <p>, <ul>, <li>, <strong>
-- Preserve mathematical formulas in $$...$$ notation
-- Structure content logically for exam preparation
-- ALL mathematical expressions MUST use proper notation enclosed in $$
-
-Format: Use HTML formatting with proper tags.`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                res.render("quicknotes.ejs", {
-                    topic: "Course Material Analysis",
-                    gradeLevel: level,
-                    content: response.data.choices[0].message.content 
-                });
+                const pdfNoteContent = await geminiGenerate(
+                    "You are an expert educator specializing in analyzing comprehensive academic course materials. Transform content into well-organized study notes with HTML formatting. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Transform the following comprehensive course material into detailed study notes for ${level} level students:\n\nCOMPREHENSIVE COURSE MATERIAL:\n${extractedText}\n\nCreate study notes with these requirements:\n- Use HTML formatting: <h2>, <h3>, <p>, <ul>, <li>, <strong>\n- Preserve mathematical formulas in $$...$$ notation\n- Structure content logically for exam preparation`
+                );
+                res.render("quicknotes.ejs", { topic: "Course Material Analysis", gradeLevel: level, content: pdfNoteContent });
             }
             else if (type === "flashcards") {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    "model": "sonar-pro",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educator creating flashcards from comprehensive course material that includes properly extracted text, mathematical notation, table data, and visual element descriptions. Return only a JSON array of objects with 'question' and 'answer' properties. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\int x dx = \\frac{x^2}{2} + C$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Analyze the following comprehensive course material and create 10 high-quality flashcards for ${level} level students. This content includes properly extracted mathematical formulas, table data, and visual element descriptions.
-
-COMPREHENSIVE COURSE MATERIAL:
-${extractedText}
-
-Requirements:
-- Format as JSON array: [{"question": "...", "answer": "..."}]
-- Include questions about key concepts, definitions, and important principles
-- Include questions about mathematical formulas, equations, and calculations
-- Create questions about data from tables and charts mentioned
-- Include questions about visual elements and their significance
-- Test both factual knowledge and conceptual understanding
-- Use clear, ${level}-appropriate language
-- Make answers comprehensive but concise
-- Cover the full breadth of content including visual and mathematical elements
-- Return only a valid JSON array.
-- Do not include any Markdown code fences, explanations, or extra text.
-- Output must start directly with '[' and end with ']'.
-- Generate exactly 10 flashcards covering the most essential content from this material.
-- ALL mathematical expressions MUST use proper notation enclosed in $$`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
-                        "Content-Type": "application/json"
-                    }
-                });
-                
-                const flashcards = JSON.parse(response.data.choices[0].message.content);
+                const pdfFcRaw = await geminiGenerate(
+                    "You are an expert educator creating flashcards from course material. Return only a JSON array of objects with 'question' and 'answer' properties. No markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Create 10 high-quality flashcards for ${level} level students from this course material:\n\n${extractedText}\n\nReturn only a valid JSON array starting with '[' and ending with ']'.`
+                );
+                const flashcards = JSON.parse(pdfFcRaw.replace(/```json\n?|```/g, '').trim());
                 
                 req.session.flashcards = flashcards;
                 req.session.topic = "Course Material";
@@ -675,43 +523,11 @@ Requirements:
                 });
             }
             else {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educational assessment creator analyzing comprehensive course material with properly extracted mathematical notation, table data, and visual element descriptions. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or formatting. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$y = mx + b$$)"
-                        },
-                        {
-                            "role": "user", 
-                            "content": `Create a comprehensive 10-question multiple choice quiz based on the following extracted course material for ${level} students. This content includes mathematical formulas, table data, and visual element descriptions.
-
-COMPREHENSIVE COURSE MATERIAL:
-${extractedText}
-
-Requirements:
-- Format: JSON array only, no other text
-- Each question must have: question, option1, option2, option3, option4, answer
-- Answer field must specify which option is correct (e.g., "option2")
-- All options should be plausible but only one correct
-- Include questions about key definitions, principles, and applications
-- Include questions about mathematical formulas and calculations when present
-- Include questions about data from tables and charts
-- Include questions about visual elements and their significance
-- Test both factual recall and conceptual understanding
-- Use clear, ${level}-appropriate language
-- Cover different aspects of the comprehensive material provided
-- ALL mathematical expressions MUST use proper notation enclosed in $$
-- Generate exactly 10 questions covering the essential content from this course material.`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                const content = JSON.parse(response.data.choices[0].message.content);
+                const pdfQuizRaw = await geminiGenerate(
+                    "You are an expert educational assessment creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text or markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Create a 10-question multiple choice quiz for ${level} students based on this course material:\n\n${extractedText}\n\nEach question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.`
+                );
+                const content = JSON.parse(pdfQuizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = "Course Material";
                 req.session.gradeLevel = level;
                 req.session.content = content;
@@ -747,45 +563,12 @@ Requirements:
         let fullText = transcript.map(item=>item.text).join(" ");
         if (type === "quicknotes") {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educator. Create study materials in HTML format with proper tags. Never show your research process or mention search results. Start directly with the educational content. For ALL mathematical expressions, use proper notation enclosed in $$ (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Write extremely thorough study notes from the transcript of an educational study video which is as follows: ${fullText} for ${level} level students. The student should be able to revise this for exams.
-
-Format Requirements:
-- Start with a clear definition
-- Use HTML tags: <h1>, <h2>, <h3> for headings
-- Use <strong> for bold, <em> for italic
-- Use <p> for paragraphs and <br> for line breaks
-- Use <ul><li> for bullet points
-- Add practical examples
-- No meta-commentary about sources
-- No phrases like "based on the search results"
-- If mathematical in nature, include example problems with solutions formatted in $$...$$ notation
-- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$E = mc^2$$)
-
-Topic: ${url}
-Level: ${level}`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                req.session.content = response.data.choices[0].message.content
-                res.render("quicknotes.ejs", {
-                    topic: "Youtube Video",
-                    gradeLevel: level,
-                    content: response.data.choices[0].message.content
-                });
+                const urlNoteContent = await geminiGenerate(
+                    "You are an expert educator. Create study materials in HTML format with proper tags. Start directly with the educational content. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Write extremely thorough study notes from this YouTube video transcript for ${level} level students:\n\n${fullText}\n\nUse HTML tags: <h1>, <h2>, <h3>, <p>, <ul>, <li>, <strong>. ALL math in $$...$$ notation.`
+                );
+                req.session.content = urlNoteContent;
+                res.render("quicknotes.ejs", { topic: "Youtube Video", gradeLevel: level, content: urlNoteContent });
                 
             } catch (error) {
                 console.error("Quick notes error:", error.message);
@@ -794,32 +577,11 @@ Level: ${level}`
         }
         else if (type === "flashcards") {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    "model": "sonar-pro",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Create flashcards in JSON format. Return only a JSON array of objects with 'question' and 'answer' properties. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\frac{1}{2}$$)"
-                        },
-                        {
-                            "role": "user",
-                            "content": `Generate 10 flashcards using the transcript of a youtube video which is as follows: ${fullText} at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}].
-
-Requirements:
-- No meta-commentary about sources
-- No phrases like "based on the search results"
-- Include mathematical concepts in $$...$$ notation where needed
-- ALL mathematical expressions MUST use proper notation enclosed in $$`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
-                        "Content-Type": "application/json"
-                    }
-                });
-                
-                const flashcards = JSON.parse(response.data.choices[0].message.content);
+                const urlFcRaw = await geminiGenerate(
+                    "Create flashcards in JSON format. Return only a JSON array of objects with 'question' and 'answer' properties. No markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Generate 10 flashcards from this YouTube transcript at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}]. Return only valid JSON.\n\n${fullText}`
+                );
+                const flashcards = JSON.parse(urlFcRaw.replace(/```json\n?|```/g, '').trim());
                 
                 req.session.flashcards = flashcards;
                 req.session.topic = url;
@@ -840,50 +602,11 @@ Requirements:
         } 
         else {
             try {
-                const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-                    model: "sonar-pro",
-                    messages: [
-                        {
-                            "role": "system",
-                            "content": "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or formatting. Each question must have exactly 4 distinct, plausible options with one clearly correct answer. ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$x^2 + 5x + 6$$)"
-                        },
-                        {
-                            "role": "user", 
-                            "content": `Create a 10-question multiple choice quiz from the transcript of a youtube video which is as follows: ${fullText} for ${level} school students.
-
-Requirements:
-- Format: JSON array only, no other text
-- Each question must have: question, option1, option2, option3, option4, answer
-- Answer field must specify which option is correct (e.g., "option2")
-- All options should be plausible but only one correct
-- Questions should test understanding, not just memorization
-- Use clear, grade-appropriate language
-- ONLY IF the topic is mathematical in nature or could have calculation based questions, include 3-4 questions which involve calculations
-- ALL mathematical expressions MUST use proper notation enclosed in $$ (e.g., $$\\sqrt{25} = 5$$)
-
-Example format:
-[
-    {
-        "question": "What is the discriminant of the quadratic equation $$ax^2 + bx + c = 0$$?",
-        "option1": "$$b^2 - 4ac$$",
-        "option2": "$$-b \\pm \\sqrt{b^2 - 4ac}$$", 
-        "option3": "$$4ac - b^2$$",
-        "option4": "$$a^2 + b^2 + c^2$$",
-        "answer": "option1"
-    }
-]
-
-Topic: ${topic}
-Grade Level: ${level}`
-                        }
-                    ]
-                }, {
-                    headers: {
-                        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-                    }
-                });
-                
-                const content = JSON.parse(response.data.choices[0].message.content);
+                const urlQuizRaw = await geminiGenerate(
+                    "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text or markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
+                    `Create a 10-question multiple choice quiz from this YouTube transcript for ${level} school students. Each question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.\n\n${fullText}`
+                );
+                const content = JSON.parse(urlQuizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = url;
                 req.session.gradeLevel = level;
                 req.session.content = content;
@@ -1009,25 +732,11 @@ IMPORTANT: Format your response in proper HTML with:
 - Do NOT use Markdown syntax (##, -, **) - use actual HTML tags only
 - If referencing mathematical concepts, use $$...$$ proper latex notation`;
 
-    const analysis = await axios.post("https://api.perplexity.ai/chat/completions",{
-        model:"sonar-pro",
-        messages:[
-            {
-                role:"system",
-                content:"You are an expert educator in "+req.session.topic+". Analyze quiz data and provide actionable insights. For mathematical expressions, use $$...$$ notation."
-            },
-            {
-                role:"user",
-                content:prompt
-            }
-        ]
-    },{
-        headers:{
-            Authorization:`Bearer ${process.env.PERPLEXITY_API_KEY}`
-        }
-    })
-    
-    const processedAnalysis = processMathContent(analysis.data.choices[0].message.content);
+    const analysisText = await geminiGenerate(
+        `You are an expert educator in ${req.session.topic}. Analyze quiz data and provide actionable insights. For mathematical expressions, use $$...$$ notation.`,
+        prompt
+    );
+    const processedAnalysis = processMathContent(analysisText);
     
     res.render("quiz.ejs",{
         topic:req.session.topic,
@@ -1093,25 +802,10 @@ Please provide a comprehensive response that:
 Text to expand: "${text}"`;
         }
         
-        const response = await axios.post("https://api.perplexity.ai/chat/completions", {
-            model: "sonar",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert educator providing detailed explanations for study materials. Use proper LaTeX formatting for mathematical expressions."
-                },
-                {
-                    role: "user",
-                    content: finalPrompt
-                }
-            ]
-        }, {
-            headers: {
-                Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
-            }
-        });
-
-        const expansion = response.data.choices[0].message.content;
+        const expansion = await geminiGenerate(
+            "You are an expert educator providing detailed explanations for study materials. Use proper LaTeX formatting for mathematical expressions.",
+            finalPrompt
+        );
         console.log(expansion);
         res.json({ expansion });
     } catch (error) {
