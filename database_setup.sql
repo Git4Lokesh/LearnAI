@@ -153,6 +153,18 @@ CREATE TABLE IF NOT EXISTS session_notes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Individual User Progress (persistent BKT state)
+CREATE TABLE IF NOT EXISTS user_progress (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    skill_id VARCHAR(255) NOT NULL,
+    mastery_score DECIMAL(5,4) DEFAULT 0.2000,
+    questions_answered INTEGER DEFAULT 0,
+    correct_answers INTEGER DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, skill_id)
+);
+
 -- Group Progress Tracking (aggregate BKT scores)
 CREATE TABLE IF NOT EXISTS group_progress (
     id SERIAL PRIMARY KEY,
@@ -194,6 +206,7 @@ CREATE TABLE IF NOT EXISTS quiz_leaderboard (
 -- INDEXES FOR PERFORMANCE
 -- ============================================
 
+CREATE INDEX IF NOT EXISTS idx_user_progress_user ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_room ON room_members(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_content_room ON room_content(room_id);
