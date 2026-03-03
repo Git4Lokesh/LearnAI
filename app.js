@@ -10,7 +10,9 @@ import pg from 'pg';
 import bcrypt from 'bcrypt';
 import passport from 'passport';
 import {Strategy} from 'passport-local';
+import rateLimit from 'express-rate-limit';
 import { bktUpdate, bktNext } from './services/bktClient.js';
+import { extractTextFromPDF } from './services/pdfService.js';
 import { ensureBktService } from './services/bktRunner.js';
 import { YoutubeTranscript } from "@danielxceron/youtube-transcript";
 import { Server as SocketIOServer } from 'socket.io';
@@ -51,6 +53,23 @@ const db = new pg.Client({
 
 
 await db.connect();
+
+async function getUserMastery(userId, skillId) {
+    const r = await db.query(
+        'SELECT mastery_score, questions_answered, correct_answers FROM user_progress WHERE user_id=$1 AND skill_id=$2',
+        [userId, skillId]
+    );
+    return r.rows[0] ?? { mastery_score: 0.2, questions_answered: 0, correct_answers: 0 };
+}
+
+async function upsertUserMastery(userId, skillId, masteryScore, questionsAnswered, correctAnswers) {
+    await db.query(`
+        INSERT INTO user_progress (user_id, skill_id, mastery_score, questions_answered, correct_answers, last_updated)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, skill_id) DO UPDATE
+        SET mastery_score=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP
+    `, [userId, skillId, masteryScore, questionsAnswered, correctAnswers]);
+}
 
 marked.setOptions({
     breaks: true,
@@ -370,8 +389,13 @@ passport.serializeUser((user, cb) => {
 passport.deserializeUser((user, cb) => {
     cb(null, user);
 });
+
+const generateLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const chatLimiter    = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+const expandLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false });
+
 // Main generation route
-app.post("/generate", ensureAuthenticated, upload.single('document'), async (req, res) => {
+app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('document'), async (req, res) => {
     const topic = req.body.topic;
     const level = req.body.gradeLevel;
     const type = req.body.studyType;
@@ -533,7 +557,8 @@ Grade Level: ${level}`
                 req.session.content = content;
                 let bktInfo = null;
                 try {
-                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(topic) });
+                    const progress = await getUserMastery(req.user.id, topic);
+                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(topic), p_mastery: parseFloat(progress.mastery_score) });
                 } catch (e) {
                     console.warn('BKT next (generate) failed:', e.message || e);
                 }
@@ -558,74 +583,7 @@ Grade Level: ${level}`
         }
         
         try {
-            console.log("Processing PDF with LlamaParse API...");
-            
-            const formData = new FormData();
-            formData.append('file', req.file.buffer, {
-                filename: req.file.originalname,
-                contentType: 'application/pdf'
-            });
-            
-            const uploadResponse = await axios.post(
-                'https://api.cloud.llamaindex.ai/api/v1/parsing/upload',
-                formData,
-                {
-                    headers: {
-                        'accept': 'application/json', 
-                        'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}`,
-                        ...formData.getHeaders()
-                    }
-                }
-            );
-            
-            const jobId = uploadResponse.data.id;
-            console.log("Upload successful, job ID:", jobId);
-            
-            let jobComplete = false;
-            let attempts = 0;
-            const maxAttempts = 30;
-            
-            while (!jobComplete && attempts < maxAttempts) {
-                const statusResponse = await axios.get(
-                    `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}`,
-                    {
-                        headers: {
-                            'accept': 'application/json', 
-                            'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}` 
-                        }
-                    }
-                );
-                
-                if (statusResponse.data.status === 'SUCCESS') {
-                    jobComplete = true;
-                } else if (statusResponse.data.status === 'ERROR') {
-                    throw new Error('PDF parsing failed');
-                } else {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    attempts++;
-                }
-            }
-            
-            if (!jobComplete) {
-                throw new Error('PDF parsing timeout');
-            }
-            
-            const resultResponse = await axios.get(
-                `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}/result/markdown`,
-                {
-                    headers: {
-                        'accept': 'application/json',
-                        'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}` 
-                    }
-                }
-            );
-            
-            const extractedText = resultResponse.data.markdown;
-            console.log("LlamaParse extraction successful, text length:", extractedText.length);
-            
-            if (!extractedText || extractedText.trim().length < 50) {
-                return res.status(400).send("PDF content appears to be empty or too short. Please ensure the PDF contains readable text.");
-            }
+            const extractedText = await extractTextFromPDF(req.file.buffer, req.file.originalname);
             
             if (type === "quicknotes") {
                 const response = await axios.post("https://api.perplexity.ai/chat/completions", {
@@ -759,7 +717,8 @@ Requirements:
                 req.session.content = content;
                 let bktInfo = null;
                 try {
-                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(req.session.topic) });
+                    const progress = await getUserMastery(req.user.id, req.session.topic);
+                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(req.session.topic), p_mastery: parseFloat(progress.mastery_score) });
                 } catch (e) {
                     console.warn('BKT next (generate-pdf) failed:', e.message || e);
                 }
@@ -774,16 +733,9 @@ Requirements:
             }
             
         } catch (error) {
-            console.error("LlamaParse API error:", error.message);
-            
-            if (error.response?.status === 429) {
-                return res.status(429).send("API rate limit reached. Please try again later.");
-            }
-            
-            if (error.response?.status === 401) {
-                return res.status(500).send("Authentication failed. Check your LLAMA_CLOUD_API_KEY.");
-            }
-            
+            console.error("PDF processing error:", error.message);
+            if (error.response?.status === 429) return res.status(429).send("API rate limit reached. Please try again later.");
+            if (error.response?.status === 401) return res.status(500).send("Authentication failed. Check your LLAMA_CLOUD_API_KEY.");
             return res.status(500).send("Failed to process PDF. Please try again.");
         }
     }
@@ -937,7 +889,8 @@ Grade Level: ${level}`
                 req.session.content = content;
                 let bktInfo = null;
                 try {
-                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(url) });
+                    const progress = await getUserMastery(req.user.id, url);
+                    bktInfo = await bktNext({ userId: String(req.user.id), skillId: String(url), p_mastery: parseFloat(progress.mastery_score) });
                 } catch (e) {
                     console.warn('BKT next (generate) failed:', e.message || e);
                 }
@@ -991,21 +944,34 @@ app.post("/quiz", ensureAuthenticated, async (req, res) => {
 
     // Update BKT with each response under the current topic as the skill
     const skillId = String(req.session.topic);
+    let progressBefore = { mastery_score: 0.2, questions_answered: 0, correct_answers: 0 };
+    try {
+        progressBefore = await getUserMastery(req.user.id, skillId);
+    } catch (e) { console.warn('getUserMastery failed:', e.message); }
+
+    let currentMastery = parseFloat(progressBefore.mastery_score);
+    let totalAnswered = progressBefore.questions_answered;
+    let totalCorrect = progressBefore.correct_answers;
     try {
         for (let i = 0; i < req.session.content.length; i++) {
             const correct = userAnswers[i] === req.session.content[i].answer;
-            await bktUpdate({
+            const result = await bktUpdate({
                 userId: String(req.user.id),
                 skillId: skillId,
-                correct: Boolean(correct)
+                correct: Boolean(correct),
+                p_mastery: currentMastery
             });
+            currentMastery = result.posterior_mastery;
+            totalAnswered++;
+            if (correct) totalCorrect++;
         }
+        await upsertUserMastery(req.user.id, skillId, currentMastery, totalAnswered, totalCorrect);
     } catch (e) {
         console.warn('BKT update (submit) failed:', e.message || e);
     }
     let bktInfoAfter = null;
     try {
-        bktInfoAfter = await bktNext({ userId: String(req.user.id), skillId: skillId });
+        bktInfoAfter = await bktNext({ userId: String(req.user.id), skillId: skillId, p_mastery: currentMastery });
     } catch (e) {
         console.warn('BKT next (submit) failed:', e.message || e);
     }
@@ -1015,6 +981,7 @@ app.post("/quiz", ensureAuthenticated, async (req, res) => {
 Topic: ${req.session.topic}
 Grade Level: ${req.session.gradeLevel}
 Score: ${score}/${req.session.content.length}
+Current Mastery Level: ${bktInfoAfter ? (bktInfoAfter.mastery * 100).toFixed(1) + '%' : 'N/A'} (${bktInfoAfter?.recommendedDifficulty || 'unknown'} difficulty recommended)
 
 Questions and Answers:
 ${JSON.stringify({
@@ -1076,7 +1043,7 @@ IMPORTANT: Format your response in proper HTML with:
 });
 
 // Text expansion API
-app.post('/api/expand-text', ensureAuthenticated, async (req, res) => {
+app.post('/api/expand-text', ensureAuthenticated, expandLimiter, async (req, res) => {
     try {
         const { text, type, prompt, topic, gradeLevel, customQuestion } = req.body;
         
@@ -1526,27 +1493,28 @@ app.get("/chat", ensureAuthenticated, (req, res) => {
         user: req.user
     });
 });
-app.post("/api/chat", ensureAuthenticated, async (req, res) => {
+app.post("/api/chat", ensureAuthenticated, chatLimiter, async (req, res) => {
     try {
         const { message, sessionId } = req.body;
-        
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
-        }
-        
-        // Import and call the chat function
-        const { chatWithPerplexity } = await import('./services/chatService.js');
-        
-        const response = await chatWithPerplexity(
-            message,
-            req.user.id,
-            sessionId || 'default'
-        );
-        
-        res.json({ response });
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+        const { chatWithPerplexityStream } = await import('./services/chatService.js');
+        await chatWithPerplexityStream(message, req.user.id, sessionId || 'default', res);
     } catch (error) {
         console.error('Chat API error:', error);
-        res.status(500).json({ error: 'Failed to get AI response' });
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to get AI response' });
+    }
+});
+
+app.post("/api/chat/upload-pdf", ensureAuthenticated, upload.single('document'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'PDF file required' });
+        const { sessionId } = req.body;
+        const { ingestPDFForSession } = await import('./services/chatService.js');
+        const chunkCount = await ingestPDFForSession(req.file.buffer, req.file.originalname, req.user.id, sessionId || 'default');
+        res.json({ success: true, chunks: chunkCount });
+    } catch (error) {
+        console.error('Chat PDF upload error:', error);
+        res.status(500).json({ error: 'Failed to process PDF' });
     }
 });
 
@@ -1620,50 +1588,17 @@ app.post('/master/start', ensureAuthenticated, upload.single('document'), async 
         if (method === 'pdf') {
             if (!req.file) return res.status(400).send('Please upload a PDF file');
             try {
-                const formData = new FormData();
-                formData.append('file', req.file.buffer, {
-                    filename: req.file.originalname,
-                    contentType: 'application/pdf'
-                });
-                const uploadResponse = await axios.post(
-                    'https://api.cloud.llamaindex.ai/api/v1/parsing/upload',
-                    formData,
-                    {
-                        headers: {
-                            'accept': 'application/json',
-                            'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}`,
-                            ...formData.getHeaders()
-                        }
-                    }
-                );
-                const jobId = uploadResponse.data.id;
-                let done = false; let attempts = 0;
-                while (!done && attempts < 30) {
-                    const statusResponse = await axios.get(
-                        `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}`,
-                        { headers: { 'accept': 'application/json', 'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}` } }
-                    );
-                    if (statusResponse.data.status === 'SUCCESS') done = true;
-                    else if (statusResponse.data.status === 'ERROR') throw new Error('PDF parsing failed');
-                    else { await new Promise(r => setTimeout(r, 1000)); attempts++; }
-                }
-                if (!done) throw new Error('PDF parsing timeout');
-                const resultResponse = await axios.get(
-                    `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}/result/markdown`,
-                    { headers: { 'accept': 'application/json', 'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}` } }
-                );
-                const extractedText = resultResponse.data.markdown;
-                if (!extractedText || extractedText.trim().length < 50) {
-                    return res.status(400).send('PDF content appears empty or too short.');
-                }
-                req.session.masterContext = extractedText;
+                req.session.masterContext = await extractTextFromPDF(req.file.buffer, req.file.originalname);
             } catch (err) {
                 console.error('Master PDF parse error:', err.message || err);
                 return res.status(500).send('Failed to process PDF for mastery mode');
             }
         }
         let info = null;
-        try { info = await bktNext({ userId: String(req.user.id), skillId: String(topic) }); } catch {}
+        try {
+            const progress = await getUserMastery(req.user.id, topic);
+            info = await bktNext({ userId: String(req.user.id), skillId: String(topic), p_mastery: parseFloat(progress.mastery_score) });
+        } catch {}
         const mastery = info?.mastery ?? 0.2;
         const difficulty = info?.recommendedDifficulty || 'medium';
         const question = await generateSingleQuestion(topic, level, difficulty, req.session.masterContext || null);
@@ -1688,14 +1623,19 @@ app.post('/master/answer', ensureAuthenticated, async (req, res) => {
         if (!topic || !level || !question) return res.redirect('/master');
         const userAnswer = req.body.answer;
         const correct = userAnswer === question.answer;
+        let currentMasterMastery = 0.2;
         try {
-            await bktUpdate({ userId: String(req.user.id), skillId: String(topic), correct: Boolean(correct) });
+            const progress = await getUserMastery(req.user.id, topic);
+            currentMasterMastery = parseFloat(progress.mastery_score);
+            const updated = await bktUpdate({ userId: String(req.user.id), skillId: String(topic), correct: Boolean(correct), p_mastery: currentMasterMastery });
+            currentMasterMastery = updated.posterior_mastery;
+            await upsertUserMastery(req.user.id, topic, currentMasterMastery, progress.questions_answered + 1, progress.correct_answers + (correct ? 1 : 0));
         } catch (e) {
             console.warn('BKT update (master) failed:', e.message || e);
         }
         let info = null;
-        try { info = await bktNext({ userId: String(req.user.id), skillId: String(topic) }); } catch {}
-        const mastery = info?.mastery ?? 0.2;
+        try { info = await bktNext({ userId: String(req.user.id), skillId: String(topic), p_mastery: currentMasterMastery }); } catch {}
+        const mastery = info?.mastery ?? currentMasterMastery;
         if (mastery >= 0.95) {
             // Clear session so user can start a new topic cleanly
             req.session.masterQuestion = null;
@@ -1729,12 +1669,15 @@ app.post('/api/bkt/update', ensureAuthenticated, async (req, res) => {
         if (!skillId || typeof correct === 'undefined') {
             return res.status(400).json({ error: 'skillId and correct are required' });
         }
+        const progress = await getUserMastery(req.user.id, skillId);
         const result = await bktUpdate({
             userId: String(req.user.id),
             skillId: String(skillId),
             correct: Boolean(correct),
-            params: params || {}
+            p_mastery: parseFloat(progress.mastery_score),
+            ...(params || {})
         });
+        await upsertUserMastery(req.user.id, skillId, result.posterior_mastery, progress.questions_answered + 1, progress.correct_answers + (correct ? 1 : 0));
         res.json(result);
     } catch (err) {
         console.error('BKT update error:', err.message || err);
@@ -1748,9 +1691,11 @@ app.post('/api/bkt/next', ensureAuthenticated, async (req, res) => {
         if (!skillId) {
             return res.status(400).json({ error: 'skillId is required' });
         }
+        const progress = await getUserMastery(req.user.id, skillId);
         const result = await bktNext({
             userId: String(req.user.id),
-            skillId: String(skillId)
+            skillId: String(skillId),
+            p_mastery: parseFloat(progress.mastery_score)
         });
         res.json(result);
     } catch (err) {
@@ -2536,20 +2481,6 @@ io.on('connection', (socket) => {
         // Broadcast quiz question to room
         const { roomId, questionIndex } = data;
         socket.to(`room_${roomId}`).emit('quiz_synced', { questionIndex });
-    });
-    
-    socket.on('note_edit', (data) => {
-        // Broadcast note edits for collaborative editing
-        const { roomId, roomContentId, edit } = data;
-        // Save edit to database
-        if (edit && edit.type && edit.position !== undefined) {
-            db.query(
-                `INSERT INTO room_notes_edits (room_content_id, user_id, edit_type, position, content)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [roomContentId, edit.userId, edit.type, edit.position, edit.content]
-            ).catch(err => console.error('Error saving edit:', err));
-        }
-        socket.to(`room_${roomId}`).emit('note_edited', { roomContentId, edit });
     });
     
     socket.on('annotation_typing', (data) => {
