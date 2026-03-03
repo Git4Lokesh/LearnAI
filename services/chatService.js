@@ -34,7 +34,7 @@ export async function chatWithPerplexityStream(message, userId, sessionId = 'def
     }
 
     const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-1.5-flash',
         systemInstruction: `You are a helpful AI study assistant. Provide clear, concise, and educational responses to help students learn.${contextBlock}`
     });
 
@@ -79,7 +79,7 @@ export async function chatWithPerplexity(message, userId, sessionId = 'default')
     }
 
     const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-1.5-flash',
         systemInstruction: `You are a helpful AI study assistant.${contextBlock}`
     });
 
