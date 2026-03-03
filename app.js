@@ -47,7 +47,7 @@ const saltRounds = 12;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function geminiGenerate(systemPrompt, userPrompt) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: systemPrompt });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: systemPrompt });
     const result = await model.generateContent(userPrompt);
     return result.response.text();
 }
