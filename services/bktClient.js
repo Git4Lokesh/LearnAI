@@ -13,3 +13,17 @@ export async function bktNext({ userId, skillId, p_mastery = 0.2 }) {
     const { data } = await axios.post(`${baseUrl}/next`, { userId, skillId, p_mastery }, { timeout: 5000 });
     return data;
 }
+
+export async function bktUpdateConcept({ userId, skillId, correct, p_mastery = 0.2, difficulty_tier = 2, time_taken_seconds = null }) {
+    const { data } = await axios.post(`${baseUrl}/update-concept`, {
+        userId: String(userId), skillId, correct, p_mastery, difficulty_tier, time_taken_seconds
+    }, { timeout: 5000 });
+    return data;
+}
+
+export async function bktNextConcept({ userId, subject = null }) {
+    const { data } = await axios.post(`${baseUrl}/next-concept`, {
+        userId: parseInt(userId), subject
+    }, { timeout: 5000 });
+    return data;
+}
