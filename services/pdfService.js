@@ -13,14 +13,14 @@ export async function extractTextFromPDF(fileBuffer, originalName) {
 
     const jobId = uploadResponse.data.id;
     let done = false, attempts = 0;
-    while (!done && attempts < 30) {
+    while (!done && attempts < 60) {
         const status = await axios.get(
             `https://api.cloud.llamaindex.ai/api/v1/parsing/job/${jobId}`,
             { headers: { 'accept': 'application/json', 'Authorization': `Bearer ${process.env.LLAMA_CLOUD_API_KEY}` } }
         );
         if (status.data.status === 'SUCCESS') done = true;
         else if (status.data.status === 'ERROR') throw new Error('PDF parsing failed');
-        else { await new Promise(r => setTimeout(r, 1000)); attempts++; }
+        else { await new Promise(r => setTimeout(r, 2000)); attempts++; }
     }
     if (!done) throw new Error('PDF parsing timeout');
 

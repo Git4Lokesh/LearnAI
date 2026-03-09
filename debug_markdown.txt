@@ -1,0 +1,860 @@
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q1.
+
+Let x1, x2, … , x10 be ten observations such that ∑i=110 (xi − 2) = 30, ∑i=110 (xi − β)2 = 98, β > 2, and their variance is 4. If μ and σ2 are respectively the mean and the variance of 2 (x1 − 1) + 4β, 2 (x2 − 1) + 4β, … , 2 (x10 − 1) + 4β, then σ2 is equal to :
+
+- (1) 100
+- (2) 120
+- (3) 110
+- (4) 90
+
+# Q2.
+
+Consider an A. P. of positive integers, whose sum of the first three terms is 54 and the sum of the first twenty terms lies between 1600 and 1800. Then its 11th term is :
+
+- (1) 90
+- (2) 84
+- (3) 122
+- (4) 108
+
+# Q3.
+
+The number of solutions of the equation (9 − 9x + 2) (2 − 7√x + 3) = 0 is:
+
+- (1) 2
+- (2) 3
+- (3) 1
+- (4) 4
+
+# Q4.
+
+Define a relation R on the interval [0, π) by xRy if and only if sec2 x − tan2 y = 1. Then R is :
+
+- (1) both reflexive and transitive but not symmetric
+- (2) an equivalence relation
+- (3) reflexive but neither symmetric nor transitive
+- (4) both reflexive and symmetric but not transitive
+
+# Q5.
+
+Two parabolas have the same focus (4, 3) and their directrices are the x-axis and the y-axis, respectively. If these parabolas intersect at the points A and B, then (AB)2 is equal to :
+
+- (1) 392
+- (2) 384
+- (3) 192
+- (4) 96
+
+# Q6.
+
+Let P be the set of seven digit numbers with sum of their digits equal to 11. If the numbers in P are formed by using the digits 1, 2 and 3 only, then the number of elements in the set P is :
+
+- (1) 173
+- (2) 164
+- (3) 158
+- (4) 161
+
+# Q7.
+
+Let a = i + 2j + k and b = 2i + 7j + 3k. Let L1: r = (−i + 2j + k) + λa, λ ∈ R and L2: r = (2j + k) + μb, μ ∈ R be two lines. If the line L3 passes through the point of intersection of L1 and L2, and is parallel to a + b, then L3 passes through the point :
+
+- (1) (5, 17, 4)
+- (2) (2, 8, 5)
+- (3) (8, 26, 12)
+- (4) (−1, −1, 1)
+
+# Q8.
+
+Let a = 2i − j + 3k, b = 3i − 5j + k and c be a vector such that a × c = c × b and (a + c) ⋅ (b + c) = 168. Then the maximum value of |c|2 is :
+
+- (1) 462
+- (2) 77
+- (3) 154
+- (4) 308
+
+# Q9.
+
+The integral 80 ∫0π (sinθ + cosθ)dθ is equal to :
+
+- (1) 3 loge 4
+- (2) 4 loge 3
+- (3) 6 loge 4
+- (4) 2 loge 3
+
+
+
+---
+
+2025 (29 Jan ∣ Shift 1)                                      ∣                                   JEE Main Previous Year Paper
+
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q10.
+
+Let the ellipse E1:  x2 + y2 = 1, a > b and E2: x2 + y2 = 1, A &#x3C; B have same eccentricity 1. Let the product of their lengths of latus rectums be √3 and the distance between the foci of E1 be 4. If E1 and E2 meet at A, B, C and D, then the area of the quadrilateral ABCD equals:
+
+- (1) 12√6
+- (2) 6√6
+- (3) 18√6
+- (4) 24√6
+
+# Q11.
+
+Let A = [aij] = [log5 128 log4 5]. If Aij is the cofactor of aij, Cij = ∑k=12 aikAjk, 1 ≤ i, j ≤ 2, and C = [Cij], then 8|C| is equal to:
+
+- (1) 288
+- (2) 222
+- (3) 242
+- (4) 262
+
+# Q12.
+
+Let |z1 − 8 − 2i| ≤ 1 and |z2 − 2 + 6i| ≤ 2, z1, z2 ∈ C. Then the minimum value of |z1 − z2| is:
+
+- (1) 13
+- (2) 10
+- (3) 3
+- (4) 7
+
+# Q13.
+
+Let L1: x−1 = y−2 = z−1 and L2: x+1 = y−2 = z be two lines. Let L3 be a line passing through the point (α, β, γ) and be perpendicular to both L1 and L2. If L3 intersects L1, then |5α − 11β − 8γ| equals:
+
+- (1) 20
+- (2) 18
+- (3) 25
+- (4) 16
+
+# Q14.
+
+Let M and m respectively be the maximum and the minimum values of
+
+f (x) = (1 + sin2 x) cos2 x 4 sin 4x / (sin2 x 1 + cos2 x 4 sin 4x), x ∈ R. Then M4 − m4 is equal to:
+
+- (1) 1280
+- (2) 1295
+- (3) 1215
+- (4) 1040
+
+# Q15.
+
+Let ABC be a triangle formed by the lines 7x − 6y + 3 = 0, x + 2y − 31 = 0 and 9x − 2y − 19 = 0. Let the point (h, k) be the image of the centroid of ΔABC in the line 3x + 6y − 53 = 0. Then h2 + k2 + hk is equal to:
+
+- (1) 47
+- (2) 37
+- (3) 36
+- (4) 40
+
+# Q16.
+
+The value of limn→∞ (∑k=1n (k3 + 6k2 + 11k + 5) / (k + 3)!) is:
+
+- (1) 4/3
+- (2) 2
+- (3) 7/3
+- (4) 5/3
+
+# Q17.
+
+The least value of n for which the number of integral terms in the Binomial expansion of (√7 + √11)n is 183, is:
+
+- (1) 2184
+- (2) 2196
+- (3) 2148
+- (4) 2172
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q18.
+
+Let y = y(x) be the solution of the differential equation
+
+cos x(loge (cos x))2dy + (sin x − 3y sin x loge (cos x))dx = 0, x ∈ (0, π ). If y ( π ) =  −1 , then y ( π ) is equal to :
+
+| (1) loge 1 | (2) 2   |
+| ---------- | ------- |
+| (3) loge 1 | (4) − 1 |
+
+# Q19.
+
+Let the line x + y = 1 meet the circle x2 + y2 = 4 at the points A and B. If the line perpendicular to AB and passing through the mid point of the chord AB intersects the circle at C and D, then the area of the quadrilateral ADBC is equal to :
+
+| (1) √14  | (2) 3√7 |
+| -------- | ------- |
+| (3) 2√14 | (4) 5√7 |
+
+# Q20.
+
+Let the area of the region {(x, y) : 2y ≤ x2 + 3, y + |x| ≤ 3, y ≥ |x − 1|} be A. Then 6 A is equal to :
+
+| (1) 16 | (2) 12 |
+| ------ | ------ |
+| (3) 14 | (4) 18 |
+
+# Q21.
+
+Let S = {x : cos−1 x = π + sin−1 x + sin−1(2x + 1)}. Then ∑x∈ S(2x − 1)2 is equal to ______.
+
+# Q22.
+
+Let f : (0, ∞) → R be a twice differentiable function. If for some a ≠ 0, ∫01 f (λx)dλ = af (x), f (1) = 1 and f (16) = 1/8, then 16 − f ′ ( 1 ) is equal to ______.
+
+# Q23.
+
+The number of 6-letter words, with or without meaning, that can be formed using the letters of the word MATHS such that any letter that appears in the word must appear at least twice, is ______.
+
+# Q24.
+
+Let S = {m ∈ Z : Am2 + Am = 3I − A−6}, where A = [2  −1; 1  0]. Then n(S) is equal to ______.
+
+# Q25.
+
+Let [t] be the greatest integer less than or equal to t. Then the least value of p ∈ N for which limx→0+ (x ([ 1 ] + [ 2 ] + … + [ p ]) − x2 ([ 1 ] + [ 22 ] + … + [ 92 ])) ≥ 1 is equal to ______.
+
+# Q26.
+
+An electric dipole of mass m, charge q, and length l is placed in a uniform electric field E = E0i. When the dipole is rotated slightly from its equilibrium position and released, the time period of its oscillations will be:
+
+| (1) 1/2π √ml  | (2) 2π√ml/qE0  |
+| ------------- | -------------- |
+| (3) 1/2π √2ml | (4) 2π√ml/2qE0 |
+
+# Q27.
+
+A coil of area A and N turns is rotating with angular velocity ω in a uniform magnetic field B about an axis perpendicular to B. Magnetic flux φ and induced emf ε across it, at an instant when B is parallel to the plane of coil, are :
+
+| (1) φ = AB, ε = 0   | (2) φ = 0, ε = 0     |
+| ------------------- | -------------------- |
+| (3) φ = 0, ε = NABω | (4) φ = AB, ε = NABω |
+
+# Q28.
+
+Given below are two statements: one is labelled as Assertion (A) and the other is labelled as Reason (R).
+
+Assertion (A): Choke coil is simply a coil having a large inductance but a small resistance. Choke coils are used with fluorescent mercury-tube fittings. If household electric power is directly connected to a mercury
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper JEE Main 2025 January MathonGo
+
+tube, the tube will be damaged. Reason (R): By using the choke coil, the voltage across the tube is reduced by a factor (R/√R2 + ω2L2), where ω is frequency of the supply across resistor R and inductor L. If the choke coil were not used, the voltage across the resistor would be the same as the applied voltage. In the light of the above statements, choose the most appropriate answer from the options given below:
+
+- (1) (A) is true but (R) is false
+- (2) Both (A) and (R) are true and (R) is the correct explanation of (A)
+- (3) (A) is false but (R) is true
+- (4) Both (A) and (R) are true but (R) is not the correct explanation of (A)
+
+Q29. As shown below, bob A of a pendulum having massless string of length ' R ' is released from 60° to the vertical. It hits another bob B of half the mass that is at rest on a frictionless table in the center. Assuming elastic collision, the magnitude of the velocity of bob A after the collision will be (take g as acceleration due to gravity.)
+
+- (1) 4 √Rg / 3
+- (2) 2 √Rg / 3
+- (3) √Rg
+- (4) 1 √Rg / 3
+
+Q30. Given below are two statements: one is labelled as Assertion (A) and the other is labelled as Reason (R).
+
+Assertion (A): Electromagnetic waves carry energy but not momentum. Reason (R): Mass of a photon is zero. In the light of the above statements, choose the most appropriate answer from the options given below:
+
+- (1) Both (A) and (R) are true and (R) is the correct explanation of (A)
+- (2) Both (A) and (R) are true but (R) is not the correct explanation of (A)
+- (3) (A) is false but (R) is true
+- (4) (A) is true but (R) is false
+
+Q31. Two projectiles are fired with same initial speed from same point on ground at angles of (45° − α) and (45° + α), respectively, with the horizontal direction. The ratio of their maximum heights attained is:
+
+- (1) 1−tan α / 1+tan α
+- (2) 1−sin 2α / 1+sin 2α
+- (3) 1+sin 2α / 1−sin 2α
+- (4) 1+sin α / 1−sin α
+
+Q32. If λ and K are de Broglie wavelength and kinetic energy, respectively, of a particle with constant mass. The correct graphical representation for the particle will be:
+
+
+
+---
+
+JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+MathonGo
+
+(1)  ↑1          1II                   (2)
+
+ngo                              ↑
+
+mathongo                          nathongo    matho
+
+1                                    1
+
+K go            mathongo          K athongo                   matho
+
+ho                  mathongo                           athor      matho
+
+0                  λ                 0                       λ
+
+(3)  ↑                                 (4)
+
+1 go               math              1                thongo     matho
+
+K                                    K
+
+hol go              mathon                             athoago    matho
+
+0                  λ→hong                            0
+
+# Q33.
+
+Given below are two statements: one is labelled as Assertion (A) and the other is labelled as Reason (R).
+
+Assertion (A): Emission of electrons in photoelectric effect can be suppressed by applying a sufficiently negative electron potential to the photoemissive substance.
+
+Reason (R): A negative electric potential, which stops the emission of electrons from the surface of a photoemissive substance, varies linearly with frequency of incident radiation.
+
+In the light of the above statements, choose the most appropriate answer from the options given below:
+
+- (1) (A) is false but (R) is true
+- (2) (A) is true but (R) is false
+- (3) Both (A) and (R) are true and (R) is the correct explanation of (A)
+- (4) Both (A) and (R) are true but (R) is not the correct explanation of (A)
+
+# Q34.
+
+Consider a long straight wire of a circular cross-section (radius a) carrying a steady current I. The current is uniformly distributed across this cross-section. The distances from the centre of the wire's cross-section at which the magnetic field [inside the wire, outside the wire] is half of the maximum possible magnetic field, anywhere due to the wire, will be:
+
+- (1) [a/4, 3a/2]
+- (2) [a/4, 2a]
+- (3) [a/2, 2a]
+- (4) [a/2, 3a]
+
+# Q35.
+
+At the interface between two materials having refractive indices n1 and n2, the critical angle for reflection of an em wave is θ1C. The n2 material is replaced by another material having refractive index n3 such that the critical angle at the interface between n1 and n3 materials is θ2C. If n3 > n2 > n1; n² = 2 and
+
+sin θ2C − sin θ1C = 1/2, then θ1C is:
+
+- (1) sin-1(1/6)
+- (2) sin-1(1/3)
+- (3) sin-1(-5/6)
+- (4) sin-1(2/3)
+
+# Q36.
+
+Let u and v be the distances of the object and the image from a lens of focal length f. The correct graphical representation of u and v for a convex lens when |u| > f is:
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q37.
+
+| List - I                                                                                                                                   | List - II     |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| (A) Electric field inside (distance r > 0 from center) of a uniformly charged spherical shell with surface charge density σ, and radius R. | (I) σ/ϵ0      |
+| (B) Electric field at distance r>0 from a uniformly charged infinite plane sheet with surface charge density σ.                            | (II) σ/2ϵ0    |
+| (C) Electric field outside (distance r>0 from center) of a uniformly charged spherical shell with surface charge density σ, and radius R.  | (III) 0       |
+| (D) Electric field between 2 oppositely charged infinite plane parallel sheets with uniform surface charge density σ.                      | (IV) σR²/ϵ0r2 |
+
+Match List - I with List - II. Choose the correct answer from the options given below:
+
+1. (A)-(III), (B)-(II), (C)-(IV), (D)-(I)
+2. (A)-(IV), (B)-(II), (C)-(III), (D)-(I)
+3. (A)-(II), (B)-(I), (C)-(IV), (D)-(III)
+4. (A)-(IV), (B)-(I), (C)-(III), (D)-(II)
+
+# Q38.
+
+For the circuit shown above, equivalent GATE is:
+
+1. OR gate
+2. NAND gate
+3. NOT gate
+4. AND gate
+
+
+
+---
+
+2025 (29 Jan Shift 1)                                                       JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q39.
+
+The expression given below shows the variation of velocity (v) with time (t), v = At2 + Bt. The dimension of ABC is :
+
+- (1) [M0 L1 T−3]
+- (2) [M0 L2 T−2]
+- (3) [M0 L1 T−2]
+- (4) [M0 L2 T−3]
+
+# Q40.
+
+The work done in an adiabatic change in an ideal gas depends upon only :
+
+- (1) change in its temperature
+- (2) change in its volume
+- (3) change in its pressure
+- (4) change in its specific heat
+
+# Q41.
+
+The fractional compression ( ΔV ) of water at the depth of 2.5 km below the sea level is ______ %. Given, the Bulk modulus of water = 2 × 109 N m−2, density of water = 103 kgm−3, acceleration due to gravity = g = 10 m s−2.
+
+- (1) 1.25
+- (2) 1.0
+- (3) 1.75
+- (4) 1.5
+
+# Q42.
+
+The pair of physical quantities not having same dimensions is :
+
+- (1) Pressure and Young's modulus
+- (2) Surface tension and impulse
+- (3) Torque and energy
+- (4) Angular momentum and Planck's constant
+
+# Q43.
+
+Consider I1 and I2 are the currents flowing simultaneously in two nearby coils 1 &#x26; 2, respectively. If L1 = self inductance of coil 1, M12 = mutual inductance of coil 1 with respect to coil 2, then the value of induced emf in coil 1 will be:
+
+- (1) ε1 = −L1 dI2 − M12 dI1
+- (2) ε1 = −L1 dI1 − M12 dI2
+- (3) ε1 = −L1 dI1 − M12 dI1
+- (4) ε1 = −L1 dI1 + M12 dI2
+
+# Q44.
+
+Given below are two statements: one is labelled as Assertion (A) and the other is labelled as Reason (R).
+
+Assertion (A): Time period of a simple pendulum is longer at the top of a mountain than that at the base of the mountain.
+
+Reason (R): Time period of a simple pendulum decreases with increasing value of acceleration due to gravity and vice-versa. In the light of the above statements, choose the most appropriate answer from the options given below:
+
+- (1) Both (A) and (R) are true and (R) is the correct explanation of (A)
+- (2) (A) is true but (R) is false
+- (3) (A) is false but (R) is true
+- (4) Both (A) and (R) are true but (R) is not the correct explanation of (A)
+
+# Q45.
+
+A body of mass ' m ' connected to a massless and unstretchable string goes in vertical circle of radius ' R ' under gravity g. The other end of the string is fixed at the center of circle. If velocity at top of circular path is n√gR, where, n ≥ 1, then ratio of kinetic energy of the body at bottom to that at top of the circle is:
+
+- (1) n2
+- (2) n2 + 4
+- (3) n + 4
+- (4) n
+
+# Q46.
+
+In a hydraulic lift, the surface area of the input piston is 6 cm2 and that of the output piston is 1500 cm2. If 100 N force is applied to the input piston to raise the output piston by 20 cm, then the work done is _______ kJ.
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# Q47.
+
+The coordinates of a particle with respect to origin in a given reference frame is (1, 1, 1) meters. If a force of
+F = i − j + k acts on the particle, then the magnitude of torque (with respect to origin) in z-direction is ______.
+
+# Q48.
+
+Two light beams fall on a transparent material block at point 1 and 2 with angle θ1 and θ2 respectively, as shown in figure. After refraction, the beams intersect at point 3 which is exactly on the interface at other end of the block. Given: the distance between 1 and 2, d = 4√3 cm and θ1 = θ2 = cos−1(n2), where refractive index of the block n2 > refractive index of the outside medium n1, then the thickness of the block is ________ cm.
+
+# Q49.
+
+A container of fixed volume contains a gas at 27∘C. To double the pressure of the gas, the temperature of gas should be raised to ______ ∘C.
+
+# Q50.
+
+The maximum speed of a boat in still water is 27 km/h. Now this boat is moving downstream in a river flowing at 9 km/h. A man in the boat throws a ball vertically upwards with speed of 10 m/s. Range of the ball as observed by an observer at rest on the river bank, is _______ cm. (Take g = 10 m/s2)
+
+# Q51.
+
+List - I
+(Complex)
+List - II
+(Hybridisation &#x26; Magnetic characters)
+
+Match List - I with List - II.
+
+| (A) \[MnBr4]2−     | (I) d2s3 & diamagnetic    |
+| ------------------ | ------------------------- |
+| (B) \[FeF6]3−      | (II) sp3d2 & paramagnetic |
+| (C) \[Co(C2O4)3]3− | (III) sp3 & diamagnetic   |
+| (D) \[Ni(CO)4]     | (IV) sp3 & paramagnetic   |
+
+Choose the correct answer from the options given below:
+
+1. (A) −(IV), (B) − (II), (C) − (I), (D) − (III)
+2. (A) −(III), (B) − (I), (C) − (II), (D) − (IV)
+3. (A) −(IV), (B) − (I), (C) − (II), (D) − (III)
+4. (A) − (III), (B) − (II), (C) − (I), (D) − (IV)
+
+# Q52.
+
+J of energy is transferred as heat to 0.5 mol of Argon gas at 298 K and 1.00 atm. The final temperature and the change in internal energy respectively are: Given: R = 8.3 J K−1 mol−1
+
+1. 378 K and 500 J
+2. 368 K and 500 J
+3. 348 K and 300 J
+4. 378 K and 300 J
+
+# Q53.
+
+At temperature T, compound AB2(g) dissociates as AB2(g) ⇌ AB(g) + 1/2 B2(g) having degree of dissociation x (small compared to unity). The correct expression for x in terms of Kp and p is
+
+
+
+---
+
+JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Questions
+
+# Q54.
+
+An element ' E ′ has the ionisation enthalpy value of 374 kJ mol−1. ' E ' reacts with elements A, B, C and D with electron gain enthalpy values of −328, −349, −325 and −295 kJ mol−1, respectively. The correct order of the products EA, EB, EC and ED in terms of ionic character is :
+
+- (1) ED > EC > EB > EA
+- (2) EA > EB > EC > ED
+- (3) EB > EA > EC > ED
+- (4) ED > EC > EA > EB
+
+# Q55.
+
+Total number of nucleophiles from the following is :
+
+- NH₃
+- PhSH
+- (H₃C)₂S
+- H₂C=CH₂
+- OH⁻
+- H₃O⁺
+- (CH₃)₂CO
+- NCH₃
+
+- (1) 7
+- (2) 4
+- (3) 6
+- (4) 5
+
+# Q56.
+
+The steam volatile compounds among the following are :
+
+- (A) NO₂
+- (B) NO₂
+- (C) H₂N
+- (D) HO
+
+Choose the correct answer from the options given below :
+
+- (1) (B) and (D) Only
+- (2) (A) and (C) Only
+- (3) (A), (B) and (C) Only
+- (4) (A) and (B) Only
+
+# Q57.
+
+Given below are two statements :
+
+Statement (I): The radii of isoelectronic species increases in the order. Mg²⁺ &#x3C; Na⁺ &#x3C; F⁻ &#x3C; O²⁻
+
+Statement (II): The magnitude of electron gain enthalpy of halogen decreases in the order. Cl > F > Br > I
+
+In the light of the above statements, choose the most appropriate answer from the options given below :
+
+- (1) Statement I is incorrect but Statement II is correct
+- (2) Statement I is correct but Statement II is incorrect
+- (3) Both Statement I and Statement II are incorrect
+- (4) Both Statement I and Statement II are correct
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper JEE Main 2025 January MathonGo
+
+# Q58.
+
+List - I           List - II
+
+(Carbohydrate)     (Linkage Source)
+
+Match List - I with List - II.
+
+- (A) Amylose            (I) β − C1 − C4, plant
+- (B) Cellulose          (II) α − C1 − C4, animal
+- (C) Glycogen           (III) α − C1 − C4, α − C1 − C6, plant
+- (D) Amylopectin        (IV) α − C1 − C4, plant
+
+Choose the correct answer from the options given below:
+
+1. (1) (A)-(IV), (B)-(I), (C)-(III), (D)-(II)
+2. (2) (A)-(III), (B)-(II), (C)-(I), (D)-(IV)
+3. (3) (A)-(II), (B)-(III), (C)-(I), (D)-(IV)
+4. (4) (A)-(IV), (B)-(I), (C)-(II), (D)-(III)
+
+# Q59.
+
+The molar conductivity of a weak electrolyte when plotted against the square root of its concentration, which of the following is expected to be observed?
+
+1. (1) A small decrease in molar conductivity is observed at infinite dilution.
+2. (2) Molar conductivity decreases sharply with increase in concentration.
+3. (3) A small increase in molar conductivity is observed at infinite dilution.
+4. (4) Molar conductivity increases sharply with increase in concentration.
+
+# Q60.
+
+The standard reduction potential values of some of the p-block ions are given below. Predict the one with the strongest oxidising capacity.
+
+1. (1) E⊖Pb4+/Pb2+ = +1.67 V
+2. (2) E⊖Sn4+/Sn2+ = +1.15 V
+3. (3) E⊖Al3+/Al = −1.66 V
+4. (4) E⊖Tl = /Tl/2.26 V
+
+# Q61.
+
+The product (P) formed in the following reaction is:
+
+natnoncd
+
+hong minongo O mathongo mathongo
+
+nathongo mathongo /II. mathongo Zn- Hg Product (P)
+
+HCl
+
+nathonH Oongo !II. mathongo 1I1. mathongo !I
+
+1. (1) ongc
+2. (2) HOathong mallongo
+3. (3) OH
+4. (4) O
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q62.
+
+If a0 is denoted as the Bohr radius of hydrogen atom, then what is the de-Broglie wavelength (λ) of the electron present in the second orbit of hydrogen atom? [n : any integer]
+
+- (1) 8πa0
+- (2) 2a0
+- (3) 4n
+- (4) 4πa0
+
+# Q63.
+
+List - I
+
+List - II
+
+| (A) H3C-CH2CH-CH2-CH-C2H5 | (I) 4-Methylpent-1-ene       |
+| ------------------------- | ---------------------------- |
+| (B) CH5                   | (II) 3-Ethyl-5-methylheptane |
+| (C) (CH3)2C(C3H)2         | (III) 4,4-Dimethylheptane    |
+| (D)                       | (IV) 2-Methyl-1,3-pentadiene |
+
+Match List - I with List - II. Choose the correct answer from the options given below:
+
+- (1) (A)-(II), (B)-(III), (C)-(IV), (D)-(I)
+- (2) (A)-(II), (B)-(III), (C)-(I), (D)-(IV)
+- (3) (A)-(III), (B)-(II), (C)-(I), (D)-(IV)
+- (4) (A)-(III), (B)-(II), (C)-(IV), (D)-(I)
+
+# Q64.
+
+The reaction A2 + B2 → 2AB follows the mechanism:
+
+A2 + B2 → 2AB (fast)
+
+A + B2 → AB + B (slow)
+
+A + B → AB (fast)
+
+The overall order of the reaction is:
+
+- (1) 2
+- (2) 2.5
+- (3) 3
+- (4) 1.5
+
+# Q65.
+
+1.24 g of AX2 (molar mass 124 g mol−1) is dissolved in 1 kg of water to form a solution with boiling point of 100.0156°C, while 25.4 g of AY2 (molar mass 250 g mol−1) in 2 kg of water constitutes a solution with a boiling point of 100.0260°C Kb (H2O) = 0.52 K kg mol−1. Which of the following is correct?
+
+- (1) AX2 is fully ionised while AY2 is completely unionised.
+- (2) AX2 is completely unionised while AY2 is fully ionised.
+- (3) AX2 and AY2 (both) are completely unionised.
+- (4) AX2 and AY2 (both) are fully ionised.
+
+# Q66.
+
+Choose the correct statements:
+
+- (A) Weight of a substance is the amount of matter present in it.
+- (B) Mass is the force exerted by gravity on an object.
+- (C) Volume is the amount of space occupied by a substance.
+- (D) Temperatures below 0°C are possible in Celsius scale, but in Kelvin scale negative temperature is not possible.
+- (E) Precision refers to the closeness of various measurements for the same quantity.
+
+Choose the correct answer from the options given below:
+
+- (1) (A), (D) and (E) Only
+- (2) (C), (D) and (E) Only
+- (3) (A), (B) and (C) Only
+- (4) (B), (C) and (D) Only
+
+# Q67.
+
+The correct option with order of melting points of the pairs (Mn, Fe), (Tc, Ru) and (Re, Os) is:
+
+- (1) Fe &#x3C; Mn, Ru &#x3C; Tc and Re &#x3C; Os
+- (2) Mn &#x3C; Fe, Tc &#x3C; Ru and Os &#x3C; Re
+- (3) Mn &#x3C; Fe, Tc &#x3C; Ru and Re &#x3C; Os
+- (4) Fe &#x3C; Mn, Ru &#x3C; Tc and Os &#x3C; Re
+
+
+
+---
+
+2025 (29 Jan ∣Shift 1) ∣ JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# Q68.
+
+For a Mg Mg2+(aq) Ag+(aq) Ag the correct Nernst Equation is :
+
+| (1) | Ecell = Eo − RT ln \[Ag+]  |
+| --- | -------------------------- |
+| (2) | Ecell = Eo + RT ln \[Ag+]² |
+| (3) | Ecell = Eo − RT ln \[Ag+]² |
+| (4) | Ecell = Eo − RT ln \[Mg2+] |
+
+# Q69.
+
+In the following substitution reaction: NO2 product 'P' formed is :
+
+| (1) | Br    | Br    |
+| --- | ----- | ----- |
+| (2) | Br    | OC2H5 |
+| (3) | OC2H5 |       |
+| (4) | OC2H5 | Br    |
+
+# Q70.
+
+The correct increasing order of stability of the complexes based on Δo value is :
+
+| (1) | IV < III < II < I |
+| --- | ----------------- |
+| (2) | I < II < IV < III |
+| (3) | III < II < IV < I |
+| (4) | II < III < I < IV |
+
+# Q71.
+
+The molar mass of the water insoluble product formed from the fusion of chromite ore (FeCr2O4) with Na2CO3 in presence of O2 is _______ gmol−1.
+
+# Q72.
+
+Given below are some nitrogen containing compounds:
+
+| NH2 | CH2-NH2 | N-COCH3 | NH2 |
+| --- | ------- | ------- | --- |
+
+
+---
+
+JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+Each of them is treated with HCl separately. 1.0 g of the most basic compound will consume _______ mg of HCl. (Given molar mass in gmol−1 C : 12, H : 1, O : 16, Cl : 35.5)
+
+# Q73.
+
+The sum of sigma (σ) and pi (π) bonds in Hex-1,3-dien-5-yne is _______.
+
+# Q74.
+
+OH
+
+nathe III. mathongo mathongo mathongo III mo
+
+one mole
+
+ong CrO3 mathongo mo
+
+!I. OH excess → P H(+) Q
+
+① CH3Mg I
+
+mathongo mathongo matho in ether
+
+①NaBH4 ②HO(+)
+
+nathongo /II. mathongo reduction
+
+②H2O
+
+0.1 mole of compound ' S ' will weigh _______ g. (Given molar mass in gmol−1 C : 12, H : 1, O : 16)
+
+# Q75.
+
+If A2B is 30% ionised in an aqueous solution, then the value of van't Hoff factor (i) is ______ ×10−1.
+
+
+
+---
+
+2025 (29 Jan Shift 1) JEE Main Previous Year Paper
+# JEE Main 2025 January
+
+# MathonGo
+
+# ANSWER KEYS
+
+| 1. (1)    | 2. (1)     | 3. (4)   | 4. (2)  | 5. (3)  | 6. (4)    | 7. (3)     | 8. (4)    |
+| --------- | ---------- | -------- | ------- | ------- | --------- | ---------- | --------- |
+| 9. (2)    | 10. (4)    | 11. (3)  | 12. (4) | 13. (3) | 14. (1)   | 15. (2)    | 16. (4)   |
+| 17. (1)   | 18. (1)    | 19. (3)  | 20. (3) | 21. (5) | 22. (112) | 23. (1405) | 24. (2)   |
+| 25. (24)  | 26. (4)    | 27. (3)  | 28. (2) | 29. (4) | 30. (3)   | 31. (2)    | 32. (2)   |
+| 33. (4)   | 34. (3)    | 35. (3)  | 36. (3) | 37. (1) | 38. (1)   | 39. (4)    | 40. (1)   |
+| 41. (1)   | 42. (2)    | 43. (2)  | 44. (1) | 45. (2) | 46. (5)   | 47. (2)    | 48. (6)   |
+| 49. (327) | 50. (2000) | 51. (1)  | 52. (3) | 53. (3) | 54. (3)   | 55. (4)    | 56. (4)   |
+| 57. (4)   | 58. (4)    | 59. (2)  | 60. (1) | 61. (1) | 62. (1)   | 63. (1)    | 64. (4)   |
+| 65. (1)   | 66. (2)    | 67. (2)  | 68. (2) | 69. (4) | 70. (2)   | 71. (160)  | 72. (341) |
+| 73. (15)  | 74. (13)   | 75. (16) |         |         |           |            |           |
+

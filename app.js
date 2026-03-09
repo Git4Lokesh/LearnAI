@@ -12,7 +12,8 @@ import bcrypt from 'bcrypt';
 import passport from 'passport';
 import {Strategy} from 'passport-local';
 import rateLimit from 'express-rate-limit';
-import { bktUpdate, bktNext } from './services/bktClient.js';
+import { bktUpdate, bktNext, bktUpdateConcept, bktNextConcept } from './services/bktClient.js';
+import { checkPrerequisiteGaps, getOptimalLearningPath } from './services/prerequisiteService.js';
 import { extractTextFromPDF } from './services/pdfService.js';
 import { ensureBktService } from './services/bktRunner.js';
 import { YoutubeTranscript } from "@danielxceron/youtube-transcript";
@@ -46,9 +47,9 @@ const saltRounds = 12;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-async function geminiGenerate(systemPrompt, userPrompt) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest', systemInstruction: systemPrompt });
-    const result = await model.generateContent(userPrompt);
+async function geminiGenerate(systemPrompt, userPrompt, model = 'gemini-2.5-flash') {
+    const m = genAI.getGenerativeModel({ model, systemInstruction: systemPrompt });
+    const result = await m.generateContent(userPrompt);
     return result.response.text();
 }
 
@@ -63,22 +64,50 @@ const db = new pg.Client({
 
 await db.connect();
 
-async function getUserMastery(userId, skillId) {
+async function getUserConceptMastery(userId, conceptId) {
     const r = await db.query(
-        'SELECT mastery_score, questions_answered, correct_answers FROM user_progress WHERE user_id=$1 AND skill_id=$2',
-        [userId, skillId]
+        'SELECT mastery, questions_answered, correct_answers FROM user_concept_mastery WHERE user_id=$1 AND concept_id=$2',
+        [userId, conceptId]
     );
-    return r.rows[0] ?? { mastery_score: 0.2, questions_answered: 0, correct_answers: 0 };
+    return r.rows[0] ?? { mastery: 0.2, questions_answered: 0, correct_answers: 0 };
 }
 
-async function upsertUserMastery(userId, skillId, masteryScore, questionsAnswered, correctAnswers) {
-    await db.query(`
-        INSERT INTO user_progress (user_id, skill_id, mastery_score, questions_answered, correct_answers, last_updated)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id, skill_id) DO UPDATE
-        SET mastery_score=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP
-    `, [userId, skillId, masteryScore, questionsAnswered, correctAnswers]);
+// Enhanced question selection with spaced repetition and error analysis
+async function getQuestionFromDB(conceptId, difficulty, excludeIds = [], userId = null) {
+    const tierMap = { very_hard: [3], hard: [3,2], medium: [2], easy: [1,2], very_easy: [1] };
+    const tiers = tierMap[difficulty] || [2];
+    
+    // Prioritize questions user got wrong recently (spaced repetition)
+    if (userId) {
+        const recentErrors = await db.query(`
+            SELECT q.* FROM questions q
+            JOIN user_question_attempts uqa ON q.id = uqa.question_id
+            WHERE q.concept_id=$1 AND q.difficulty_tier=ANY($2) AND q.status='approved'
+            AND uqa.user_id=$3 AND uqa.correct=false AND uqa.attempted_at > NOW() - INTERVAL '7 days'
+            AND q.id != ALL($4)
+            ORDER BY uqa.attempted_at DESC LIMIT 1
+        `, [conceptId, tiers, userId, excludeIds.length ? excludeIds : [0]]);
+        
+        if (recentErrors.rows[0]) return recentErrors.rows[0];
+    }
+    
+    // Fallback to random selection
+    const r = await db.query(
+        `SELECT * FROM questions WHERE concept_id=$1 AND difficulty_tier=ANY($2) AND status='approved'
+         AND id != ALL($3) ORDER BY RANDOM() LIMIT 1`,
+        [conceptId, tiers, excludeIds.length ? excludeIds : [0]]
+    );
+    return r.rows[0] || null;
 }
+
+// Pick tier based on mastery for adaptive question selection
+function masteryToTier(mastery) {
+    if (mastery < 0.4) return 1;
+    if (mastery < 0.7) return 2;
+    return 3;
+}
+
+
 
 marked.setOptions({
     breaks: true,
@@ -165,7 +194,7 @@ Requirements:
 - Use clear, grade-appropriate language
 - If mathematical, use $$...$$ notation`
     };
-    const content = await geminiGenerate(system.content, user.content);
+    const content = await geminiGenerate(system.content, user.content, 'gemini-2.5-pro');
     let parsed;
     try {
         parsed = JSON.parse(content);
@@ -240,28 +269,22 @@ app.get("/favicon.ico", (req, res) => {
 
 app.get("/", ensureAuthenticated, async (req, res) => {
     try {
-        const response = await db.query(`
-            SELECT SUM(row_count) AS total_rows FROM (
-                SELECT COUNT(*) AS row_count FROM quiz WHERE user_id=$1
-                UNION ALL
-                SELECT COUNT(*) AS row_count FROM quicknotes where user_id=$1
-                UNION ALL
-                SELECT COUNT(*) AS row_count FROM flashcards where user_id=$1
-            ) AS counts
-        `, [req.user.id]);
-        
-        const savedContentCount = parseInt(response.rows[0].total_rows) || 0;
-        
-        res.render("dashboard.ejs", {
-            savedContentCount: savedContentCount,
-            user: req.user
+        const [conceptsRes, prereqsRes, masteryRes] = await Promise.all([
+            db.query('SELECT id, name, subject FROM concepts ORDER BY subject, name'),
+            db.query('SELECT concept_id, prereq_id FROM concept_prerequisites'),
+            db.query('SELECT concept_id, mastery, questions_answered, correct_answers FROM user_concept_mastery WHERE user_id=$1', [req.user.id])
+        ]);
+        res.render('dashboard.ejs', {
+            user: req.user,
+            graphData: {
+                concepts: conceptsRes.rows,
+                prereqs: prereqsRes.rows,
+                mastery: masteryRes.rows
+            }
         });
     } catch (error) {
-        console.error('Error counting saved content:', error);
-        res.render("dashboard.ejs", {
-            savedContentCount: 0,
-            user: req.user
-        });
+        console.error('Graph load error:', error);
+        res.render('dashboard.ejs', { user: req.user, graphData: { concepts: [], prereqs: [], mastery: [] } });
     }
 });
 
@@ -460,7 +483,8 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
             try {
                 const quizRaw = await geminiGenerate(
                     "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text, explanations, or markdown fences. Each question must have exactly 4 distinct, plausible options with one clearly correct answer. ALL mathematical expressions MUST use proper notation enclosed in $$",
-                    `Create a 10-question multiple choice quiz about ${topic} for ${level} school students.\n\nRequirements:\n- Format: JSON array only, no other text, no markdown\n- Each question must have: question, option1, option2, option3, option4, answer\n- Answer field must specify which option is correct (e.g., "option2")\n- ALL mathematical expressions MUST use proper notation enclosed in $$\n\nTopic: ${topic}\nGrade Level: ${level}`
+                    `Create a 10-question multiple choice quiz about ${topic} for ${level} school students.\n\nRequirements:\n- Format: JSON array only, no other text, no markdown\n- Each question must have: question, option1, option2, option3, option4, answer\n- Answer field must specify which option is correct (e.g., "option2")\n- ALL mathematical expressions MUST use proper notation enclosed in $$\n\nTopic: ${topic}\nGrade Level: ${level}`,
+                    'gemini-2.5-pro'
                 );
                 const content = JSON.parse(quizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = topic;
@@ -525,7 +549,8 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
             else {
                 const pdfQuizRaw = await geminiGenerate(
                     "You are an expert educational assessment creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text or markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
-                    `Create a 10-question multiple choice quiz for ${level} students based on this course material:\n\n${extractedText}\n\nEach question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.`
+                    `Create a 10-question multiple choice quiz for ${level} students based on this course material:\n\n${extractedText}\n\nEach question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.`,
+                    'gemini-2.5-pro'
                 );
                 const content = JSON.parse(pdfQuizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = "Course Material";
@@ -604,7 +629,8 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
             try {
                 const urlQuizRaw = await geminiGenerate(
                     "You are an expert educational content creator. Generate quiz questions in strict JSON format. Return ONLY a valid JSON array with no additional text or markdown fences. ALL mathematical expressions MUST use proper notation enclosed in $$",
-                    `Create a 10-question multiple choice quiz from this YouTube transcript for ${level} school students. Each question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.\n\n${fullText}`
+                    `Create a 10-question multiple choice quiz from this YouTube transcript for ${level} school students. Each question must have: question, option1, option2, option3, option4, answer. Return only valid JSON array.\n\n${fullText}`,
+                    'gemini-2.5-pro'
                 );
                 const content = JSON.parse(urlQuizRaw.replace(/```json\n?|```/g, '').trim());
                 req.session.topic = url;
@@ -734,7 +760,8 @@ IMPORTANT: Format your response in proper HTML with:
 
     const analysisText = await geminiGenerate(
         `You are an expert educator in ${req.session.topic}. Analyze quiz data and provide actionable insights. For mathematical expressions, use $$...$$ notation.`,
-        prompt
+        prompt,
+        'gemini-2.5-pro'
     );
     const processedAnalysis = processMathContent(analysisText);
     
@@ -1258,50 +1285,167 @@ app.post("/api/translate/batch", async (req, res) => {
     }
 });
 
-// Mastery Mode routes (single-question loop until mastery >= 0.95)
+// Practice routes
+function applyDecay(mastery, lastUpdated) {
+    if (!lastUpdated) return mastery;
+    const days = (Date.now() - new Date(lastUpdated).getTime()) / 86400000;
+    return Math.max(mastery * Math.exp(-0.05 * days), 0.1);
+}
+
+app.get('/practice/:conceptId', ensureAuthenticated, async (req, res) => {
+    try {
+        const { conceptId } = req.params;
+        const [conceptRes, masteryRes] = await Promise.all([
+            db.query('SELECT id, name, subject FROM concepts WHERE id=$1', [conceptId]),
+            db.query('SELECT mastery, last_updated FROM user_concept_mastery WHERE user_id=$1 AND concept_id=$2', [req.user.id, conceptId])
+        ]);
+        if (!conceptRes.rows[0]) return res.status(404).send('Concept not found');
+        const storedMastery = parseFloat(masteryRes.rows[0]?.mastery || 0.2);
+        const mastery = masteryRes.rows[0] ? applyDecay(storedMastery, masteryRes.rows[0].last_updated) : storedMastery;
+        const decayedBy = Math.round((storedMastery - mastery) * 100);
+        const tier = masteryToTier(mastery);
+        // Load questions at the right tier, with fallback to adjacent tiers
+        const questionsRes = await db.query(
+            `SELECT id, question_text, option1, option2, option3, option4, correct_answer, solution_text, difficulty_tier
+             FROM questions WHERE concept_id=$1 AND status='approved'
+             ORDER BY ABS(difficulty_tier - $2) ASC, RANDOM()`,
+            [conceptId, tier]
+        );
+        res.render('practice.ejs', {
+            concept: conceptRes.rows[0],
+            questions: questionsRes.rows,
+            mastery,
+            decayedBy
+        });
+    } catch (e) {
+        console.error('Practice load error:', e);
+        res.status(500).send('Failed to load practice session');
+    }
+});
+
+app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) => {
+    try {
+        const { conceptId } = req.params;
+        const { correct, difficulty_tier, time_taken_seconds, question_id } = req.body;
+        
+        // Log the attempt
+        if (question_id) {
+            await db.query(
+                'INSERT INTO user_question_attempts (user_id, question_id, correct, time_taken_seconds) VALUES ($1,$2,$3,$4)',
+                [req.user.id, question_id, correct, time_taken_seconds]
+            );
+        }
+        
+        const prev = await getUserConceptMastery(req.user.id, conceptId);
+        const updated = await bktUpdateConcept({
+            userId: req.user.id, skillId: conceptId,
+            correct: Boolean(correct), p_mastery: parseFloat(prev.mastery),
+            difficulty_tier: Number(difficulty_tier) || 2,
+            time_taken_seconds: time_taken_seconds ? Number(time_taken_seconds) : null
+        });
+        const newMastery = updated.posterior_mastery;
+        const newQA = prev.questions_answered + 1;
+        const newCA = prev.correct_answers + (correct ? 1 : 0);
+        
+        await db.query(`
+            INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
+            VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, concept_id) DO UPDATE
+            SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
+            [req.user.id, conceptId, newMastery, newQA, newCA]
+        );
+        
+        // Enhanced stagnation check with prerequisite analysis
+        let stagnating = false;
+        let prerequisiteGaps = [];
+        let suggestedPath = [];
+        
+        if (newQA >= 5 && newMastery < 0.5) {
+            stagnating = true;
+            prerequisiteGaps = await checkPrerequisiteGaps(db, req.user.id, conceptId);
+            if (prerequisiteGaps.length > 0) {
+                suggestedPath = await getOptimalLearningPath(db, req.user.id, conceptId);
+            }
+        }
+        
+        res.json({ 
+            mastery: newMastery, 
+            stagnating, 
+            prerequisiteGaps,
+            suggestedPath,
+            message: stagnating ? 
+                `Consider reviewing prerequisites: ${prerequisiteGaps.map(p => p.name).join(', ')}` : 
+                null
+        });
+    } catch (e) {
+        console.error('Practice answer error:', e);
+        res.status(500).json({ error: 'Failed to update mastery' });
+    }
+});
+
+// Adaptive questions API - fetch questions based on current mastery tier
+app.get('/api/adaptive-questions/:conceptId', ensureAuthenticated, async (req, res) => {
+    try {
+        const { conceptId } = req.params;
+        const { tier } = req.query;
+        const targetTier = parseInt(tier) || 2;
+        
+        // Fetch questions at the target tier, with fallback to adjacent tiers
+        const questionsRes = await db.query(
+            `SELECT id, question_text, option1, option2, option3, option4, correct_answer, solution_text, difficulty_tier
+             FROM questions WHERE concept_id=$1 AND status='approved'
+             AND difficulty_tier >= $2
+             ORDER BY difficulty_tier ASC, RANDOM() LIMIT 5`,
+            [conceptId, targetTier]
+        );
+        
+        res.json({ questions: questionsRes.rows });
+    } catch (e) {
+        console.error('Adaptive questions error:', e);
+        res.status(500).json({ error: 'Failed to fetch questions' });
+    }
+});
+
+// Mastery Mode — graph-aware, pulls real questions from DB
 app.get('/master', ensureAuthenticated, async (req, res) => {
     res.render('master.ejs', {
-        topic: req.session.masterTopic || '',
-        gradeLevel: req.session.masterLevel || '',
-        mastery: null,
-        question: null,
-        completed: false,
-        message: null
+        topic: null, gradeLevel: null, mastery: null,
+        question: null, completed: false, message: null,
+        conceptName: null, allConcepts: null
     });
 });
 
-app.post('/master/start', ensureAuthenticated, upload.single('document'), async (req, res) => {
+app.post('/master/start', ensureAuthenticated, async (req, res) => {
     try {
-        const topic = req.body.topic;
-        const level = req.body.gradeLevel;
-        const method = req.body.inputMethod || (req.file ? 'pdf' : 'topic');
-        if (!topic || !level) return res.status(400).send('Topic and level required');
-        req.session.masterTopic = topic;
-        req.session.masterLevel = level;
-        req.session.masterContext = null;
-        if (method === 'pdf') {
-            if (!req.file) return res.status(400).send('Please upload a PDF file');
-            try {
-                req.session.masterContext = await extractTextFromPDF(req.file.buffer, req.file.originalname);
-            } catch (err) {
-                console.error('Master PDF parse error:', err.message || err);
-                return res.status(500).send('Failed to process PDF for mastery mode');
-            }
+        const subject = req.body.subject || 'physics';
+        req.session.masterSubject = subject;
+
+        const graphData = await bktNextConcept({ userId: req.user.id, subject });
+        if (!graphData.next_concept_id) {
+            return res.render('master.ejs', {
+                topic: null, gradeLevel: null, mastery: null, question: null,
+                completed: true, message: 'All concepts mastered!',
+                conceptName: null, allConcepts: graphData.all_concepts
+            });
         }
-        let info = null;
-        try {
-            const progress = await getUserMastery(req.user.id, topic);
-            info = await bktNext({ userId: String(req.user.id), skillId: String(topic), p_mastery: parseFloat(progress.mastery_score) });
-        } catch {}
-        const mastery = info?.mastery ?? 0.2;
-        const difficulty = info?.recommendedDifficulty || 'medium';
-        const question = await generateSingleQuestion(topic, level, difficulty, req.session.masterContext || null);
+
+        const conceptId = graphData.next_concept_id;
+        const difficulty = graphData.recommendedDifficulty;
+        const question = await getQuestionFromDB(conceptId, difficulty, [], req.user.id);
+
+        if (!question) {
+            return res.status(404).send(`No approved questions found for concept: ${graphData.next_concept_name}`);
+        }
+
+        req.session.masterConceptId = conceptId;
         req.session.masterQuestion = question;
+
         res.render('master.ejs', {
-            topic, gradeLevel: level,
-            mastery, question,
-            completed: false,
-            message: null
+            topic: conceptId, gradeLevel: difficulty,
+            mastery: graphData.mastery, question,
+            completed: false, message: null,
+            conceptName: graphData.next_concept_name,
+            allConcepts: graphData.all_concepts
         });
     } catch (e) {
         console.error('Master start error:', e);
@@ -1311,44 +1455,49 @@ app.post('/master/start', ensureAuthenticated, upload.single('document'), async 
 
 app.post('/master/answer', ensureAuthenticated, async (req, res) => {
     try {
-        const topic = req.session.masterTopic;
-        const level = req.session.masterLevel;
+        const conceptId = req.session.masterConceptId;
         const question = req.session.masterQuestion;
-        if (!topic || !level || !question) return res.redirect('/master');
-        const userAnswer = req.body.answer;
-        const correct = userAnswer === question.answer;
-        let currentMasterMastery = 0.2;
-        try {
-            const progress = await getUserMastery(req.user.id, topic);
-            currentMasterMastery = parseFloat(progress.mastery_score);
-            const updated = await bktUpdate({ userId: String(req.user.id), skillId: String(topic), correct: Boolean(correct), p_mastery: currentMasterMastery });
-            currentMasterMastery = updated.posterior_mastery;
-            await upsertUserMastery(req.user.id, topic, currentMasterMastery, progress.questions_answered + 1, progress.correct_answers + (correct ? 1 : 0));
-        } catch (e) {
-            console.warn('BKT update (master) failed:', e.message || e);
-        }
-        let info = null;
-        try { info = await bktNext({ userId: String(req.user.id), skillId: String(topic), p_mastery: currentMasterMastery }); } catch {}
-        const mastery = info?.mastery ?? currentMasterMastery;
-        if (mastery >= 0.95) {
-            // Clear session so user can start a new topic cleanly
-            req.session.masterQuestion = null;
-            req.session.masterTopic = null;
-            req.session.masterLevel = null;
+        if (!conceptId || !question) return res.redirect('/master');
+
+        const correct = req.body.answer === question.correct_answer;
+        const prev = await getUserConceptMastery(req.user.id, conceptId);
+
+        // Update mastery in DB via BKT
+        const updated = await bktUpdateConcept({
+            userId: req.user.id, skillId: conceptId,
+            correct, p_mastery: parseFloat(prev.mastery)
+        });
+        const newMastery = updated.posterior_mastery;
+
+        // Get next concept from graph
+        const subject = req.session.masterSubject || 'physics';
+        const graphData = await bktNextConcept({ userId: req.user.id, subject });
+
+        if (!graphData.next_concept_id) {
             return res.render('master.ejs', {
-                topic, gradeLevel: level,
-                mastery, question: null,
-                completed: true,
-                message: 'Congratulations! You have mastered this topic.'
+                topic: null, gradeLevel: null, mastery: newMastery, question: null,
+                completed: true, message: 'All concepts mastered!',
+                conceptName: null, allConcepts: graphData.all_concepts
             });
         }
-        const nextQuestion = await generateSingleQuestion(topic, level, info?.recommendedDifficulty || 'medium', req.session.masterContext || null);
+
+        const nextConceptId = graphData.next_concept_id;
+        const nextQuestion = await getQuestionFromDB(nextConceptId, graphData.recommendedDifficulty);
+
+        if (!nextQuestion) {
+            return res.status(404).send(`No approved questions for concept: ${graphData.next_concept_name}`);
+        }
+
+        req.session.masterConceptId = nextConceptId;
         req.session.masterQuestion = nextQuestion;
+
         res.render('master.ejs', {
-            topic, gradeLevel: level,
-            mastery, question: nextQuestion,
+            topic: nextConceptId, gradeLevel: graphData.recommendedDifficulty,
+            mastery: graphData.mastery, question: nextQuestion,
             completed: false,
-            message: correct ? 'Correct!' : 'Incorrect. Keep going!'
+            message: correct ? '✓ Correct!' : '✗ Incorrect. Keep going!',
+            conceptName: graphData.next_concept_name,
+            allConcepts: graphData.all_concepts
         });
     } catch (e) {
         console.error('Master answer error:', e);
@@ -1356,7 +1505,76 @@ app.post('/master/answer', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// BKT proxy endpoints
+// Concept-specific prerequisite diagnosis API endpoint
+app.post('/api/diagnose-concept', ensureAuthenticated, async (req, res) => {
+    try {
+        const { conceptId } = req.body;
+        
+        // Set up Server-Sent Events
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        });
+        
+        function sendEvent(type, data) {
+            res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+        }
+        
+        // Get prerequisite chain for this concept (recursive)
+        const visited = new Set();
+        const toCheck = [];
+        
+        async function getPrereqChain(cId) {
+            if (visited.has(cId)) return;
+            visited.add(cId);
+            toCheck.push(cId);
+            
+            const prereqRes = await db.query(
+                'SELECT prereq_id FROM concept_prerequisites WHERE concept_id = $1',
+                [cId]
+            );
+            
+            for (const row of prereqRes.rows) {
+                await getPrereqChain(row.prereq_id);
+            }
+        }
+        
+        await getPrereqChain(conceptId);
+        
+        let gapsFound = 0;
+        
+        // Check each concept in the chain
+        for (const cId of toCheck) {
+            sendEvent('checking', { conceptId: cId });
+            
+            // Get mastery
+            const masteryRes = await db.query(
+                'SELECT mastery FROM user_concept_mastery WHERE user_id = $1 AND concept_id = $2',
+                [req.user.id, cId]
+            );
+            
+            const mastery = masteryRes.rows[0]?.mastery || 0.2;
+            
+            await new Promise(resolve => setTimeout(resolve, 500)); // Visual delay
+            
+            if (mastery < 0.7) {
+                gapsFound++;
+                sendEvent('gap', { conceptId: cId, mastery: Math.round(mastery * 100) });
+            } else {
+                sendEvent('ok', { conceptId: cId, mastery: Math.round(mastery * 100) });
+            }
+        }
+        
+        sendEvent('complete', { gapsFound, totalChecked: toCheck.length });
+        res.end();
+        
+    } catch (error) {
+        console.error('Concept diagnosis error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+        res.end();
+    }
+});
 app.post('/api/bkt/update', ensureAuthenticated, async (req, res) => {
     try {
         const { skillId, correct, params } = req.body;
@@ -2214,6 +2432,64 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
     });
+});
+
+// Admin middleware
+function ensureAdmin(req, res, next) {
+    if (req.isAuthenticated() && req.user.role === 'admin') return next();
+    res.status(403).send('Forbidden');
+}
+
+// Admin: verify queue
+app.get('/admin/verify', ensureAdmin, async (req, res) => {
+    const [qRes, statsRes, conceptsRes] = await Promise.all([
+        db.query(`SELECT * FROM questions WHERE status='pending' ORDER BY extracted_by_ai_at ASC LIMIT 1`),
+        db.query(`SELECT status, COUNT(*) as count FROM questions GROUP BY status`),
+        db.query(`SELECT id, name, subject FROM concepts ORDER BY subject, name`)
+    ]);
+    const stats = { pending: 0, approved: 0, rejected: 0 };
+    statsRes.rows.forEach(r => { stats[r.status] = parseInt(r.count); });
+    res.render('admin-verify.ejs', {
+        question: qRes.rows[0] || null,
+        stats,
+        concepts: conceptsRes.rows
+    });
+});
+
+// Admin: process verification action
+app.post('/admin/verify/:id', ensureAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { action, question_text, option1, option2, option3, option4, correct_answer, concept_id, difficulty_tier, solution_text } = req.body;
+
+    if (action === 'reject') {
+        await db.query(`UPDATE questions SET status='rejected', verified_by=$1, verified_at=NOW() WHERE id=$2`, [req.user.id, id]);
+    } else {
+        // approve or save_approve — always update fields for save_approve, only status for approve
+        if (action === 'save_approve') {
+            await db.query(`
+                UPDATE questions SET
+                    question_text=$1, option1=$2, option2=$3, option3=$4, option4=$5,
+                    correct_answer=$6, concept_id=$7, difficulty_tier=$8, solution_text=$9,
+                    status='approved', verified_by=$10, verified_at=NOW(), updated_at=NOW()
+                WHERE id=$11`,
+                [question_text, option1, option2, option3, option4, correct_answer, concept_id, parseInt(difficulty_tier), solution_text, req.user.id, id]
+            );
+        } else {
+            await db.query(`UPDATE questions SET status='approved', verified_by=$1, verified_at=NOW() WHERE id=$2`, [req.user.id, id]);
+        }
+    }
+    res.redirect('/admin/verify');
+});
+
+// Admin: payouts dashboard
+app.get('/admin/payouts', ensureAdmin, async (req, res) => {
+    const result = await db.query(`
+        SELECT u.name, COUNT(q.id) as approved_count
+        FROM questions q JOIN users u ON q.verified_by = u.id
+        WHERE q.status='approved' AND q.verified_at > NOW() - INTERVAL '7 days'
+        GROUP BY u.name ORDER BY approved_count DESC
+    `);
+    res.render('admin-payouts.ejs', { payouts: result.rows, rate: 25 });
 });
 
 // Start the server
