@@ -1,22 +1,66 @@
 -- Learn.ai Database Setup Script
 -- Run this in pgAdmin or psql to create the complete database structure
+-- This script drops and recreates all tables to match the current schema
 
 -- Create database (run this first)
 -- CREATE DATABASE "Content Storage";
 
 -- Connect to the database and run the following:
 
--- Create custom types
+-- Drop all tables in reverse dependency order (child tables first)
+DROP TABLE IF EXISTS quiz_leaderboard CASCADE;
+DROP TABLE IF EXISTS group_progress CASCADE;
+DROP TABLE IF EXISTS room_notes_edits CASCADE;
+DROP TABLE IF EXISTS room_annotations CASCADE;
+DROP TABLE IF EXISTS session_notes CASCADE;
+DROP TABLE IF EXISTS session_participants CASCADE;
+DROP TABLE IF EXISTS study_sessions CASCADE;
+DROP TABLE IF EXISTS room_chat_messages CASCADE;
+DROP TABLE IF EXISTS room_content CASCADE;
+DROP TABLE IF EXISTS room_members CASCADE;
+DROP TABLE IF EXISTS study_rooms CASCADE;
+DROP TABLE IF EXISTS quiz CASCADE;
+DROP TABLE IF EXISTS flashcards CASCADE;
+DROP TABLE IF EXISTS quicknotes CASCADE;
+DROP TABLE IF EXISTS user_question_attempts CASCADE;
+DROP TABLE IF EXISTS user_concept_mastery CASCADE;
+DROP TABLE IF EXISTS upload_jobs CASCADE;
+DROP TABLE IF EXISTS batch_students CASCADE;
+DROP TABLE IF EXISTS batches CASCADE;
+DROP TABLE IF EXISTS questions CASCADE;
+DROP TABLE IF EXISTS concept_prerequisites CASCADE;
+DROP TABLE IF EXISTS concepts CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS institutes CASCADE;
+
+-- Drop and recreate custom types
+DROP TYPE IF EXISTS question_status;
+DROP TYPE IF EXISTS subscription_status;
+DROP TYPE IF EXISTS upload_job_status;
 CREATE TYPE question_status AS ENUM ('pending', 'approved', 'rejected');
+CREATE TYPE subscription_status AS ENUM ('trial', 'active', 'suspended', 'cancelled');
+CREATE TYPE upload_job_status AS ENUM ('processing', 'completed', 'failed');
 
 -- Create tables
+CREATE TABLE institutes (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    contact_email TEXT,
+    subscription_status subscription_status DEFAULT 'trial',
+    max_students INTEGER DEFAULT 500,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     name TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
-    role VARCHAR(20) DEFAULT 'student'
+    role VARCHAR(20) DEFAULT 'student',
+    institute_id INTEGER REFERENCES institutes(id)
 );
 
 CREATE TABLE concepts (
@@ -42,7 +86,7 @@ CREATE TABLE questions (
     option4 TEXT NOT NULL,
     correct_answer VARCHAR(10) NOT NULL,
     solution_text TEXT,
-    concept_id VARCHAR(100) NOT NULL,
+    concept_id VARCHAR(100),
     difficulty_tier INTEGER NOT NULL,
     source VARCHAR(255),
     status question_status DEFAULT 'pending',
@@ -54,6 +98,9 @@ CREATE TABLE questions (
     source_year VARCHAR(10),
     source_paper VARCHAR(10),
     topic_hint VARCHAR(255),
+    institute_id INTEGER REFERENCES institutes(id),
+    concept_confidence NUMERIC(3,2),
+    needs_review_tag BOOLEAN DEFAULT false,
     FOREIGN KEY (concept_id) REFERENCES concepts(id),
     FOREIGN KEY (verified_by) REFERENCES users(id)
 );
@@ -79,6 +126,33 @@ CREATE TABLE user_question_attempts (
     attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (question_id) REFERENCES questions(id)
+);
+
+CREATE TABLE batches (
+    id SERIAL PRIMARY KEY,
+    institute_id INTEGER NOT NULL REFERENCES institutes(id),
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE batch_students (
+    batch_id INTEGER REFERENCES batches(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (batch_id, user_id)
+);
+
+CREATE TABLE upload_jobs (
+    id SERIAL PRIMARY KEY,
+    institute_id INTEGER REFERENCES institutes(id),
+    uploaded_by INTEGER REFERENCES users(id),
+    filename TEXT,
+    total_rows INTEGER,
+    processed_rows INTEGER DEFAULT 0,
+    failed_rows INTEGER DEFAULT 0,
+    status upload_job_status DEFAULT 'processing',
+    error_log JSONB DEFAULT '[]',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    completed_at TIMESTAMPTZ
 );
 
 CREATE TABLE quicknotes (
@@ -248,6 +322,14 @@ CREATE TABLE group_progress (
     FOREIGN KEY (room_id) REFERENCES study_rooms(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+-- Indexes for query performance
+CREATE INDEX idx_users_institute ON users(institute_id);
+CREATE INDEX idx_questions_institute ON questions(institute_id);
+CREATE INDEX idx_questions_status_institute ON questions(status, institute_id);
+CREATE INDEX idx_batch_students_user ON batch_students(user_id);
+CREATE INDEX idx_upload_jobs_institute ON upload_jobs(institute_id);
+CREATE INDEX idx_user_concept_mastery_mastery ON user_concept_mastery(mastery);
 
 -- Insert concept data (JEE Physics & Mathematics knowledge graph)
 INSERT INTO concepts (id, name, subject) VALUES
