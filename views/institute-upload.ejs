@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Questions - AI Study Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+            --text-primary: #F8FAFC;
+            --text-secondary: #CBD5E1;
+            --text-muted: #94A3B8;
+        }
+        body {
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+        .page-header {
+            background: linear-gradient(135deg, #312E81 0%, #7C3AED 100%);
+            padding: 2rem 0;
+            border-bottom: 2px solid var(--royal-gold);
+        }
+        .page-header h1 { color: var(--royal-gold); font-weight: 700; }
+        .card-section {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .section-label {
+            color: var(--royal-gold);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+        .form-control {
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid var(--dark-border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: var(--royal-gold);
+            box-shadow: 0 0 0 0.25rem rgba(245, 158, 11, 0.25);
+            color: var(--text-primary);
+        }
+        .btn-upload {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 2px solid var(--royal-gold);
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        .btn-upload:hover {
+            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+            color: white;
+        }
+        .alert-danger {
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid rgba(220, 38, 38, 0.4);
+            color: #FCA5A5;
+            border-radius: 12px;
+        }
+        .alert-success {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            color: #86EFAC;
+            border-radius: 12px;
+        }
+        .summary-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--dark-border);
+        }
+        .summary-stat:last-child { border-bottom: none; }
+        .summary-stat .label { color: var(--text-secondary); }
+        .summary-stat .value { font-weight: 600; font-size: 1.1rem; }
+        .stat-green { color: #86EFAC; }
+        .stat-red { color: #FCA5A5; }
+        .stat-default { color: var(--text-primary); }
+        .error-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .error-table th {
+            background: rgba(124, 58, 237, 0.15);
+            color: var(--royal-gold);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.75rem 1rem;
+        }
+        .error-table th:first-child { border-radius: 10px 0 0 0; }
+        .error-table th:last-child { border-radius: 0 10px 0 0; }
+        .error-table td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--dark-border);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .error-table tr:last-child td { border-bottom: none; }
+        .csv-example {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: pre;
+        }
+        .file-input-wrapper {
+            position: relative;
+        }
+        .file-input-wrapper input[type="file"]::file-selector-button {
+            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
+            border: 1px solid var(--royal-gold);
+            color: white;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin-right: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input-wrapper input[type="file"]::file-selector-button:hover {
+            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="bi bi-cloud-upload me-2"></i>Upload Questions</h1>
+                <a href="/institute/dashboard" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container py-4">
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i><%= error %>
+            </div>
+        <% } %>
+        <% if (typeof success !== 'undefined' && success) { %>
+            <div class="alert alert-success" role="alert">
+                <i class="bi bi-check-circle me-2"></i><%= success %>
+            </div>
+        <% } %>
+
+        <% if (typeof summary !== 'undefined' && summary) { %>
+            <!-- Upload Summary Results -->
+            <div class="card-section">
+                <div class="section-label">Upload Results</div>
+                <div class="summary-stat">
+                    <span class="label"><i class="bi bi-file-earmark me-2"></i>Filename</span>
+                    <span class="value stat-default"><%= summary.filename %></span>
+                </div>
+                <div class="summary-stat">
+                    <span class="label"><i class="bi bi-list-ol me-2"></i>Total Rows</span>
+                    <span class="value stat-default"><%= summary.totalRows %></span>
+                </div>
+                <div class="summary-stat">
+                    <span class="label"><i class="bi bi-check-circle me-2"></i>Successful Inserts</span>
+                    <span class="value stat-green"><%= summary.processedRows %></span>
+                </div>
+                <div class="summary-stat">
+                    <span class="label"><i class="bi bi-x-circle me-2"></i>Failed Rows</span>
+                    <span class="value stat-red"><%= summary.failedRows %></span>
+                </div>
+            </div>
+
+            <% if (summary.errors && summary.errors.length > 0) { %>
+                <div class="card-section">
+                    <div class="section-label">Error Details</div>
+                    <div style="overflow-x: auto;">
+                        <table class="error-table">
+                            <thead>
+                                <tr>
+                                    <th>Row</th>
+                                    <th>Errors</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% summary.errors.forEach(function(err) { %>
+                                    <tr>
+                                        <td><strong><%= err.row %></strong></td>
+                                        <td>
+                                            <% if (Array.isArray(err.errors)) { %>
+                                                <% err.errors.forEach(function(e) { %>
+                                                    <div><i class="bi bi-dot"></i> <%= e %></div>
+                                                <% }); %>
+                                            <% } else { %>
+                                                <%= err.errors %>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <% } %>
+        <% } %>
+
+        <!-- Upload Form -->
+        <div class="card-section">
+            <div class="section-label">Upload File</div>
+            <form method="POST" action="/institute/questions/upload" enctype="multipart/form-data">
+                <div class="file-input-wrapper mb-3">
+                    <input type="file" class="form-control" name="file" accept=".csv,.xlsx" required>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Accepted formats: <strong>.csv</strong> and <strong>.xlsx</strong> — Max file size: 10 MB
+                </p>
+                <button type="submit" class="btn btn-upload">
+                    <i class="bi bi-cloud-upload me-2"></i>Upload Questions
+                </button>
+            </form>
+        </div>
+
+        <!-- CSV Format Example -->
+        <div class="card-section">
+            <div class="section-label">Expected CSV Format</div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.75rem;">
+                Your file should contain the following columns. Fields marked with <span style="color: #FCA5A5;">*</span> are required.
+            </p>
+            <div class="csv-example">question_text*,option1*,option2*,option3*,option4*,correct_answer*,solution,difficulty_tier,topic_hint
+"A ball is thrown at 45°...",v²sin2θ/g,v²/g,2v²/g,v²sin²θ/2g,1,"Use projectile range formula",3,projectile_motion</div>
+            <div class="mt-3" style="font-size: 0.85rem; color: var(--text-muted);">
+                <strong style="color: var(--text-secondary);">Column reference:</strong>
+                <ul class="mt-1 mb-0" style="padding-left: 1.25rem;">
+                    <li><code>question_text</code> <span style="color: #FCA5A5;">*</span> — The question prompt</li>
+                    <li><code>option1</code> – <code>option4</code> <span style="color: #FCA5A5;">*</span> — Four answer choices</li>
+                    <li><code>correct_answer</code> <span style="color: #FCA5A5;">*</span> — Correct option number (1–4)</li>
+                    <li><code>solution</code> — Solution explanation (optional)</li>
+                    <li><code>difficulty_tier</code> — 1 (easy), 2 (medium), 3 (hard) — defaults to 2</li>
+                    <li><code>topic_hint</code> — Hint for AI concept tagging (optional)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

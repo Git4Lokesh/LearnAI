@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - AI Study Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <style>
+        :root {
+            --royal-purple: #7C3AED;
+            --royal-blue: #2563EB;
+            --royal-gold: #F59E0B;
+            --dark-bg: #0F172A;
+            --dark-card: #1E293B;
+            --dark-border: #334155;
+            --text-primary: #F8FAFC;
+            --text-secondary: #CBD5E1;
+            --text-muted: #94A3B8;
+        }
+        body { background: var(--dark-bg); color: var(--text-primary); font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; }
+        .dashboard-header { background: linear-gradient(135deg, #312E81 0%, #7C3AED 100%); padding: 2rem 0; border-bottom: 2px solid var(--royal-gold); }
+        .dashboard-header h1 { color: var(--royal-gold); font-weight: 700; }
+        .filter-bar { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .filter-bar select { background: var(--dark-bg); color: var(--text-primary); border: 1px solid var(--dark-border); border-radius: 8px; padding: 0.5rem 1rem; }
+        .filter-bar select:focus { border-color: var(--royal-purple); box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25); background: var(--dark-bg); color: var(--text-primary); }
+        .filter-bar label { color: var(--text-secondary); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .section-title { color: var(--royal-gold); font-weight: 600; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .card-section { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; padding: 1.5rem; }
+        .empty-state { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; padding: 3rem; text-align: center; color: var(--text-muted); }
+        .empty-state i { font-size: 3rem; color: var(--royal-purple); margin-bottom: 1rem; }
+        .back-link { color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; }
+        .back-link:hover { color: var(--royal-gold); }
+        /* Graph containers */
+        .graph-container { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; overflow: hidden; }
+        .graph-canvas { width: 100%; height: 500px; }
+        .graph-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--dark-border); display: flex; justify-content: space-between; align-items: center; }
+        .graph-header h5 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+        .graph-legend { display: flex; gap: 16px; align-items: center; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted); }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+        /* Student selector */
+        .student-selector { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .student-chip { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.82rem; cursor: pointer; margin: 3px; border: 1px solid var(--dark-border); background: var(--dark-bg); color: var(--text-secondary); transition: all 0.2s; }
+        .student-chip:hover { border-color: var(--royal-purple); color: var(--text-primary); }
+        .student-chip.active { background: var(--royal-purple); border-color: var(--royal-purple); color: white; }
+        .student-chip.batch-avg { background: rgba(245, 158, 11, 0.15); border-color: var(--royal-gold); color: var(--royal-gold); }
+        .student-chip.batch-avg.active { background: var(--royal-gold); color: #0F172A; }
+        /* Mastery colors */
+        .mastery-red { background: rgba(239, 68, 68, 0.3); color: #FCA5A5; }
+        .mastery-yellow { background: rgba(245, 158, 11, 0.3); color: #FDE68A; }
+        .mastery-green { background: rgba(34, 197, 94, 0.3); color: #86EFAC; }
+        .mastery-cell { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 600; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1><i class="bi bi-graph-up me-2"></i>Teacher Dashboard</h1>
+                    <a href="/institute/dashboard" class="back-link"><i class="bi bi-arrow-left me-1"></i>Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container py-4">
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <form method="GET" action="/institute/dashboard/teacher" id="filterForm">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label for="batchSelect" class="form-label">Select Batch</label>
+                        <select name="batchId" id="batchSelect" class="form-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="">-- Choose a batch --</option>
+                            <% batches.forEach(function(batch) { %>
+                                <option value="<%= batch.id %>" <%= selectedBatchId == batch.id ? 'selected' : '' %>><%= batch.name %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="subjectSelect" class="form-label">Filter by Subject</label>
+                        <select name="subject" id="subjectSelect" class="form-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="">All Subjects</option>
+                            <% subjects.forEach(function(subj) { %>
+                                <option value="<%= subj %>" <%= selectedSubject === subj ? 'selected' : '' %>><%= subj %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <% if (!selectedBatchId) { %>
+            <div class="empty-state">
+                <i class="bi bi-grid-3x3-gap d-block"></i>
+                <h5>Select a Batch</h5>
+                <p>Choose a batch from the dropdown above to view the knowledge graph.</p>
+            </div>
+        <% } else if (heatmapData && heatmapData.students.length === 0) { %>
+            <div class="empty-state">
+                <i class="bi bi-people d-block"></i>
+                <h5>No Students Found</h5>
+                <p>This batch has no students assigned yet.</p>
+            </div>
+        <% } else if (heatmapData && heatmapData.concepts.length === 0) { %>
+            <div class="empty-state">
+                <i class="bi bi-book d-block"></i>
+                <h5>No Concepts Found</h5>
+                <p>No concepts match the selected filter.</p>
+            </div>
+        <% } else if (heatmapData) { %>
+            <!-- Student Selector -->
+            <div class="student-selector">
+                <div class="section-title"><i class="bi bi-people me-2"></i>View Knowledge Graph For</div>
+                <span class="student-chip batch-avg active" data-student="batch-avg" onclick="selectStudent('batch-avg')">
+                    <i class="bi bi-bar-chart me-1"></i>Batch Average
+                </span>
+                <% heatmapData.students.forEach(function(student) { %>
+                    <span class="student-chip" data-student="<%= student.id %>" onclick="selectStudent('<%= student.id %>')">
+                        <%= student.name %>
+                    </span>
+                <% }); %>
+            </div>
+
+            <!-- Knowledge Graph -->
+            <div class="graph-container">
+                <div class="graph-header">
+                    <h5 id="graphTitle"><i class="bi bi-diagram-3 me-2"></i>Batch Average Knowledge Graph</h5>
+                    <div class="graph-legend">
+                        <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div> Mastered (≥70%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> In Progress (40-70%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div> Weak (&lt;40%)</div>
+                    </div>
+                </div>
+                <div class="graph-canvas" id="knowledgeGraph"></div>
+            </div>
+        <% } %>
+
+        <!-- Stuck Students Panel -->
+        <% if (stuckStudents && stuckStudents.length > 0) { %>
+        <div class="card-section mt-4" id="stuck-students-panel">
+            <div class="section-title"><i class="bi bi-exclamation-triangle me-2"></i>Stuck Students</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: separate; border-spacing: 0;">
+                    <thead>
+                        <tr>
+                            <% ['Student','Concept','Mastery','Questions Answered','Correct Answers'].forEach(function(h) { %>
+                            <th style="background: var(--dark-bg); color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);"><%= h %></th>
+                            <% }); %>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% stuckStudents.forEach(function(s) { %>
+                            <tr>
+                                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);">
+                                    <a href="/institute/dashboard/teacher/gaps/<%= s.user_id %>/<%= s.concept_id %>" style="color: var(--royal-purple); text-decoration: none; font-weight: 500;"><%= s.name %></a>
+                                </td>
+                                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);"><%= s.concept_name %></td>
+                                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);">
+                                    <span class="mastery-cell" data-mastery="<%= parseFloat(s.mastery).toFixed(2) %>"><%= Math.round(parseFloat(s.mastery) * 100) %>%</span>
+                                </td>
+                                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);"><%= s.questions_answered %></td>
+                                <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--dark-border);"><%= s.correct_answers %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <% } %>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Color-code mastery cells
+        document.querySelectorAll('.mastery-cell').forEach(function(cell) {
+            var m = parseFloat(cell.getAttribute('data-mastery'));
+            if (isNaN(m)) return;
+            cell.classList.add(m < 0.4 ? 'mastery-red' : m < 0.7 ? 'mastery-yellow' : 'mastery-green');
+        });
+
+        // Data from server
+        const heatmapData = <%- JSON.stringify(heatmapData || null) %>;
+        const prereqs = <%- JSON.stringify(prereqs || []) %>;
+        let network = null;
+        let currentView = 'batch-avg';
+
+        function masteryColor(m) {
+            if (m >= 0.7) return '#10B981';
+            if (m >= 0.4) return '#F59E0B';
+            return '#EF4444';
+        }
+
+        function buildGraphData(masteryMap) {
+            if (!heatmapData) return { nodes: [], edges: [] };
+            const conceptIds = new Set(heatmapData.concepts.map(c => c.id));
+
+            const nodes = heatmapData.concepts.map(c => {
+                const m = masteryMap[c.id] !== undefined ? masteryMap[c.id] : 0.2;
+                const color = masteryColor(m);
+                return {
+                    id: c.id,
+                    label: c.name.length > 22 ? c.name.substring(0, 20) + '…' : c.name,
+                    title: c.name + ' — ' + Math.round(m * 100) + '% mastery',
+                    color: { background: color, border: color, highlight: { background: color, border: '#F59E0B' } },
+                    font: { color: '#F1F5F9', size: 11, face: 'Inter, system-ui, sans-serif' },
+                    shape: 'dot',
+                    size: 16 + Math.round(m * 16),
+                    mastery: m
+                };
+            });
+
+            const edges = prereqs
+                .filter(p => conceptIds.has(p.concept_id) && conceptIds.has(p.prereq_id))
+                .map(p => ({
+                    from: p.prereq_id,
+                    to: p.concept_id,
+                    arrows: 'to',
+                    color: { color: '#374151', highlight: '#7C3AED' },
+                    width: 1.5,
+                    smooth: { type: 'curvedCW', roundness: 0.2 }
+                }));
+
+            return { nodes, edges };
+        }
+
+        function renderGraph(masteryMap, title) {
+            const container = document.getElementById('knowledgeGraph');
+            if (!container) return;
+
+            const { nodes, edges } = buildGraphData(masteryMap);
+            if (network) network.destroy();
+
+            // Topological level assignment for hierarchical layout
+            const inDegree = {};
+            const adjList = {};
+            nodes.forEach(n => { inDegree[n.id] = 0; adjList[n.id] = []; });
+            edges.forEach(e => {
+                inDegree[e.to] = (inDegree[e.to] || 0) + 1;
+                if (adjList[e.from]) adjList[e.from].push(e.to);
+            });
+            const levelMap = {};
+            const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
+            queue.forEach(id => { levelMap[id] = 0; });
+            let head = 0;
+            while (head < queue.length) {
+                const cur = queue[head++];
+                (adjList[cur] || []).forEach(next => {
+                    levelMap[next] = Math.max(levelMap[next] || 0, levelMap[cur] + 1);
+                    inDegree[next]--;
+                    if (inDegree[next] === 0) queue.push(next);
+                });
+            }
+            const leveledNodes = nodes.map(n => ({ ...n, level: levelMap[n.id] ?? 0 }));
+
+            network = new vis.Network(container, {
+                nodes: new vis.DataSet(leveledNodes),
+                edges: new vis.DataSet(edges)
+            }, {
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        direction: 'LR',
+                        sortMethod: 'directed',
+                        levelSeparation: 200,
+                        nodeSpacing: 80,
+                        treeSpacing: 120,
+                        blockShifting: true,
+                        edgeMinimization: true
+                    }
+                },
+                physics: false,
+                interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+                nodes: { borderWidth: 2 },
+                edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 } }
+            });
+
+            document.getElementById('graphTitle').innerHTML = '<i class="bi bi-diagram-3 me-2"></i>' + title;
+        }
+
+        function selectStudent(studentId) {
+            currentView = studentId;
+            // Update chip styles
+            document.querySelectorAll('.student-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.student === studentId);
+            });
+
+            if (!heatmapData) return;
+
+            if (studentId === 'batch-avg') {
+                renderGraph(heatmapData.batchAverages, 'Batch Average Knowledge Graph');
+            } else {
+                const student = heatmapData.students.find(s => String(s.id) === String(studentId));
+                if (student) {
+                    renderGraph(student.masteries, student.name + ' — Knowledge Graph');
+                }
+            }
+        }
+
+        // Initialize with batch average graph
+        if (heatmapData && heatmapData.concepts && heatmapData.concepts.length > 0) {
+            renderGraph(heatmapData.batchAverages, 'Batch Average Knowledge Graph');
+        }
+    </script>
+</body>
+</html>
