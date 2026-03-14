@@ -3,107 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prerequisite Gap Analysis - AI Study Generator</title>
+    <title>Prerequisite Gap Analysis - Learn.ai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
     <style>
-        :root {
-            --royal-purple: #7C3AED;
-            --royal-gold: #F59E0B;
-            --dark-bg: #0F172A;
-            --dark-card: #1E293B;
-            --dark-border: #334155;
-            --text-primary: #F8FAFC;
-            --text-secondary: #CBD5E1;
-            --text-muted: #94A3B8;
-        }
-        body {
-            background: var(--dark-bg);
-            color: var(--text-primary);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh;
-        }
-        .page-header {
-            background: linear-gradient(135deg, #312E81 0%, #7C3AED 100%);
-            padding: 2rem 0;
-            border-bottom: 2px solid var(--royal-gold);
-        }
-        .page-header h1 { color: var(--royal-gold); font-weight: 700; }
-        .page-header .subtitle { color: var(--text-secondary); font-size: 1rem; }
-        .back-link {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-        .back-link:hover { color: var(--royal-gold); }
-        .card-section {
-            background: var(--dark-card);
-            border: 1px solid var(--dark-border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .section-title {
-            color: var(--royal-gold);
-            font-weight: 600;
-            font-size: 1.1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 1rem;
-        }
-        .gap-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-        .gap-table th {
-            background: var(--dark-bg);
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--dark-border);
-        }
-        .gap-table td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--dark-border);
-            font-size: 0.9rem;
-        }
-        .mastery-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 0.8rem;
-        }
-        .mastery-gap { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
-        .mastery-ok { background: rgba(34, 197, 94, 0.2); color: #86EFAC; }
-        .path-step {
-            display: inline-flex;
-            align-items: center;
-            background: var(--dark-bg);
-            border: 1px solid var(--dark-border);
-            border-radius: 12px;
-            padding: 0.5rem 1rem;
-            margin: 0.25rem;
-            font-size: 0.85rem;
-        }
-        .path-arrow {
-            color: var(--royal-gold);
-            font-size: 1.2rem;
-            margin: 0 0.25rem;
-        }
-        .empty-state {
-            text-align: center;
-            color: var(--text-muted);
-            padding: 2rem;
-        }
-        .empty-state i { font-size: 2.5rem; color: var(--royal-purple); margin-bottom: 0.75rem; }
+        /* Page-specific: gap table, path steps */
+        .gap-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .gap-table th { background: var(--bg-alt); color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+        .gap-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .back-link { color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; }
+        .back-link:hover { color: var(--gold); }
     </style>
 </head>
-<body>
+<body class="bg-alt">
     <div class="page-header">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
@@ -112,13 +25,12 @@
                     <span class="subtitle"><%= studentName %> — <%= conceptName %></span>
                 </div>
             </div>
-            <a href="/institute/dashboard/teacher" class="back-link mt-2 d-inline-block"><i class="bi bi-arrow-left me-1"></i>Back to Teacher Dashboard</a>
+            <a href="/" class="back-link mt-2 d-inline-block"><i class="bi bi-arrow-left me-1"></i>Back to Dashboard</a>
         </div>
     </div>
 
     <div class="container py-4">
-        <!-- Prerequisite Gaps -->
-        <div class="card-section">
+        <div class="card-section animate-in">
             <div class="section-title"><i class="bi bi-exclamation-triangle me-2"></i>Prerequisite Gaps</div>
             <% if (gaps.length === 0) { %>
                 <div class="empty-state">
@@ -127,52 +39,35 @@
                     <p>This student has mastered all prerequisites for <%= conceptName %>.</p>
                 </div>
             <% } else { %>
-                <table class="gap-table">
-                    <thead>
-                        <tr>
-                            <th>Concept</th>
-                            <th>Mastery</th>
-                            <th>Depth</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% gaps.slice().sort((a, b) => b.depth - a.depth).forEach(function(gap) { %>
-                            <tr>
-                                <td><%= gap.name %></td>
-                                <td>
-                                    <span class="mastery-badge <%= parseFloat(gap.mastery) < 0.7 ? 'mastery-gap' : 'mastery-ok' %>">
-                                        <%= Math.round(parseFloat(gap.mastery) * 100) %>%
-                                    </span>
-                                </td>
-                                <td><%= gap.depth %></td>
-                            </tr>
-                        <% }); %>
-                    </tbody>
-                </table>
+            <table class="gap-table">
+                <thead><tr><th>Concept</th><th>Mastery</th><th>Depth</th></tr></thead>
+                <tbody>
+                    <% gaps.slice().sort((a, b) => b.depth - a.depth).forEach(function(gap) { %>
+                    <tr>
+                        <td><%= gap.name %></td>
+                        <td><span class="mastery-badge <%= parseFloat(gap.mastery) < 0.7 ? 'mastery-gap' : 'mastery-ok' %>"><%= Math.round(parseFloat(gap.mastery) * 100) %>%</span></td>
+                        <td><%= gap.depth %></td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
             <% } %>
         </div>
 
-        <!-- Recommended Learning Path -->
-        <div class="card-section">
+        <div class="card-section animate-in" style="animation-delay:0.1s">
             <div class="section-title"><i class="bi bi-signpost-split me-2"></i>Recommended Learning Path</div>
             <% if (learningPath.length === 0) { %>
-                <div class="empty-state">
-                    <i class="bi bi-check-circle d-block"></i>
-                    <p>No remediation path needed.</p>
-                </div>
+                <div class="empty-state"><i class="bi bi-check-circle d-block"></i><p>No remediation path needed.</p></div>
             <% } else { %>
-                <div class="d-flex flex-wrap align-items-center">
-                    <% learningPath.forEach(function(step, index) { %>
-                        <span class="path-step"><%= index + 1 %>. <%= step.name %></span>
-                        <% if (index < learningPath.length - 1) { %>
-                            <span class="path-arrow"><i class="bi bi-arrow-right"></i></span>
-                        <% } %>
-                    <% }); %>
-                </div>
+            <div class="d-flex flex-wrap align-items-center">
+                <% learningPath.forEach(function(step, index) { %>
+                    <span class="path-step-badge"><%= index + 1 %>. <%= step.name %></span>
+                    <% if (index < learningPath.length - 1) { %><span class="path-arrow"><i class="bi bi-arrow-right"></i></span><% } %>
+                <% }); %>
+            </div>
             <% } %>
         </div>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

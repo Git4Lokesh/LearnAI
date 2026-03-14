@@ -3,408 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Review Questions - AI Study Generator</title>
+    <title>Review Questions - Learn.ai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
     <style>
-        :root {
-            --royal-purple: #7C3AED;
-            --royal-blue: #2563EB;
-            --royal-gold: #F59E0B;
-            --dark-bg: #0F172A;
-            --dark-card: #1E293B;
-            --dark-border: #334155;
-            --text-primary: #F8FAFC;
-            --text-secondary: #CBD5E1;
-            --text-muted: #94A3B8;
-        }
-        body {
-            background: var(--dark-bg);
-            color: var(--text-primary);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh;
-        }
-        .page-header {
-            background: linear-gradient(135deg, #312E81 0%, #7C3AED 100%);
-            padding: 2rem 0;
-            border-bottom: 2px solid var(--royal-gold);
-        }
-        .page-header h1 { color: var(--royal-gold); font-weight: 700; }
-        .card-section {
-            background: var(--dark-card);
-            border: 1px solid var(--dark-border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .section-label {
-            color: var(--royal-gold);
-            font-weight: 600;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.75rem;
-        }
-        .stat-card {
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid var(--dark-border);
-            border-radius: 12px;
-            padding: 1.25rem;
-            text-align: center;
-        }
-        .stat-card .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-        }
-        .stat-card .stat-label {
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 0.25rem;
-        }
-        .stat-pending .stat-value { color: var(--royal-gold); }
-        .stat-approved .stat-value { color: #86EFAC; }
-        .stat-rejected .stat-value { color: #FCA5A5; }
-        .question-card {
-            background: var(--dark-card);
-            border: 1px solid var(--dark-border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.25rem;
-            transition: border-color 0.2s ease;
-        }
-        .question-card:hover { border-color: var(--royal-purple); }
-        .question-text {
-            font-size: 1.05rem;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            line-height: 1.6;
-        }
-        .options-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .option-item {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid var(--dark-border);
-            border-radius: 8px;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-        .option-item.correct {
-            border-color: rgba(34, 197, 94, 0.5);
-            background: rgba(34, 197, 94, 0.1);
-            color: #86EFAC;
-        }
+        /* Page-specific: question card, edit form */
+        .question-text { font-size: 1.05rem; color: var(--text); margin-bottom: 1rem; line-height: 1.6; }
         .meta-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-        .meta-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            background: rgba(124, 58, 237, 0.15);
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            border-radius: 8px;
-            padding: 0.3rem 0.65rem;
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        .meta-badge.review-flag {
-            background: rgba(245, 158, 11, 0.15);
-            border-color: rgba(245, 158, 11, 0.4);
-            color: var(--royal-gold);
-        }
-        .confidence-bar {
-            display: inline-block;
-            width: 60px;
-            height: 6px;
-            background: var(--dark-border);
-            border-radius: 3px;
-            overflow: hidden;
-            vertical-align: middle;
-            margin-left: 0.35rem;
-        }
-        .confidence-fill {
-            height: 100%;
-            border-radius: 3px;
-        }
-        .btn-approve {
-            background: rgba(34, 197, 94, 0.2);
-            border: 1px solid rgba(34, 197, 94, 0.5);
-            color: #86EFAC;
-            font-weight: 600;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
-        .btn-approve:hover {
-            background: rgba(34, 197, 94, 0.35);
-            color: #86EFAC;
-            transform: translateY(-1px);
-        }
-        .btn-reject {
-            background: rgba(220, 38, 38, 0.2);
-            border: 1px solid rgba(220, 38, 38, 0.5);
-            color: #FCA5A5;
-            font-weight: 600;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
-        .btn-reject:hover {
-            background: rgba(220, 38, 38, 0.35);
-            color: #FCA5A5;
-            transform: translateY(-1px);
-        }
-        .btn-edit-toggle {
-            background: rgba(37, 99, 235, 0.2);
-            border: 1px solid rgba(37, 99, 235, 0.5);
-            color: #93C5FD;
-            font-weight: 600;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
-        .btn-edit-toggle:hover {
-            background: rgba(37, 99, 235, 0.35);
-            color: #93C5FD;
-            transform: translateY(-1px);
-        }
-        .edit-panel {
-            display: none;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid var(--dark-border);
-            border-radius: 12px;
-            padding: 1.25rem;
-            margin-top: 1rem;
-        }
-        .edit-panel.active { display: block; }
-        .form-control, .form-select {
-            background: rgba(15, 23, 42, 0.8);
-            border: 2px solid var(--dark-border);
-            border-radius: 12px;
-            color: var(--text-primary);
-            padding: 0.75rem 1rem;
-            transition: all 0.3s ease;
-        }
-        .form-control:focus, .form-select:focus {
-            background: rgba(15, 23, 42, 0.9);
-            border-color: var(--royal-gold);
-            box-shadow: 0 0 0 0.25rem rgba(245, 158, 11, 0.25);
-            color: var(--text-primary);
-        }
-        .form-select option { background: var(--dark-card); color: var(--text-primary); }
-        .btn-save-edit {
-            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
-            border: 2px solid var(--royal-gold);
-            color: white;
-            font-weight: 600;
-            padding: 0.5rem 1.25rem;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-        }
-        .btn-save-edit:hover {
-            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4);
-            color: white;
-        }
-        .alert-danger {
-            background: rgba(220, 38, 38, 0.15);
-            border: 1px solid rgba(220, 38, 38, 0.4);
-            color: #FCA5A5;
-            border-radius: 12px;
-        }
-        .alert-success {
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            color: #86EFAC;
-            border-radius: 12px;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            color: var(--text-muted);
-        }
-        .empty-state i { font-size: 3rem; margin-bottom: 1rem; color: var(--dark-border); }
-        .solution-text {
-            background: rgba(15, 23, 42, 0.6);
-            border-left: 3px solid var(--royal-purple);
-            padding: 0.75rem 1rem;
-            border-radius: 0 8px 8px 0;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
+        .btn-save-edit { background: var(--gradient-purple); border: 2px solid var(--gold); color: white; font-weight: 600; padding: 0.5rem 1.25rem; border-radius: 10px; transition: var(--transition-slow); }
+        .btn-save-edit:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,58,237,0.4); color: white; }
+        .form-control, .form-select { background: rgba(10,15,30,0.8); border: 2px solid var(--border-light); border-radius: 12px; color: var(--text); padding: 0.75rem 1rem; transition: var(--transition-slow); }
+        .form-control:focus, .form-select:focus { background: rgba(10,15,30,0.9); border-color: var(--gold); box-shadow: 0 0 0 0.25rem rgba(245,158,11,0.25); color: var(--text); }
+        .form-select option { background: var(--card); color: var(--text); }
     </style>
 </head>
-<body>
+<body class="bg-alt">
     <div class="page-header">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
                 <h1><i class="bi bi-clipboard-check me-2"></i>Review Questions</h1>
-                <a href="/institute/dashboard" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
+                <a href="/" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
             </div>
         </div>
     </div>
 
     <div class="container py-4">
         <% if (typeof error !== 'undefined' && error) { %>
-            <div class="alert alert-danger" role="alert">
-                <i class="bi bi-exclamation-triangle me-2"></i><%= error %>
-            </div>
+            <div class="alert-dark-danger p-3 mb-3" role="alert"><i class="bi bi-exclamation-triangle me-2"></i><%= error %></div>
         <% } %>
         <% if (typeof success !== 'undefined' && success) { %>
-            <div class="alert alert-success" role="alert">
-                <i class="bi bi-check-circle me-2"></i><%= success %>
-            </div>
+            <div class="alert-dark-success p-3 mb-3" role="alert"><i class="bi bi-check-circle me-2"></i><%= success %></div>
         <% } %>
 
         <!-- Stats Cards -->
         <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <div class="stat-card stat-pending">
-                    <div class="stat-value"><%= stats.pending %></div>
-                    <div class="stat-label">Pending Review</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card stat-approved">
-                    <div class="stat-value"><%= stats.approved %></div>
-                    <div class="stat-label">Approved</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-card stat-rejected">
-                    <div class="stat-value"><%= stats.rejected %></div>
-                    <div class="stat-label">Rejected</div>
-                </div>
-            </div>
+            <div class="col-md-4"><div class="stat-card stat-card--sm stat-pending animate-in"><div class="stat-value"><%= stats.pending %></div><div class="stat-label">Pending Review</div></div></div>
+            <div class="col-md-4"><div class="stat-card stat-card--sm stat-approved animate-in" style="animation-delay:0.05s"><div class="stat-value"><%= stats.approved %></div><div class="stat-label">Approved</div></div></div>
+            <div class="col-md-4"><div class="stat-card stat-card--sm stat-rejected animate-in" style="animation-delay:0.1s"><div class="stat-value"><%= stats.rejected %></div><div class="stat-label">Rejected</div></div></div>
         </div>
 
-        <!-- Pending Questions -->
         <div class="section-label" style="font-size: 1rem;">Pending Questions (<%= questions.length %>)</div>
 
         <% if (questions.length === 0) { %>
-            <div class="card-section empty-state">
-                <div><i class="bi bi-inbox"></i></div>
+            <div class="empty-state empty-state--card">
+                <i class="bi bi-inbox"></i>
                 <h5>No pending questions</h5>
                 <p>All questions have been reviewed. Upload more questions to get started.</p>
-                <a href="/institute/questions/upload" class="btn btn-edit-toggle mt-2"><i class="bi bi-cloud-upload me-1"></i> Upload Questions</a>
+                <a href="/institute/questions/upload" class="btn-edit-toggle mt-2" style="display:inline-block;padding:8px 16px;text-decoration:none;"><i class="bi bi-cloud-upload me-1"></i> Upload Questions</a>
             </div>
         <% } else { %>
             <% questions.forEach(function(q, index) { %>
-                <div class="question-card">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span style="color: var(--text-muted); font-size: 0.8rem;">#<%= q.id %></span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem;"><%= new Date(q.created_at).toLocaleDateString() %></span>
-                    </div>
-
-                    <div class="question-text"><%= q.question_text %></div>
-
-                    <div class="options-grid">
-                        <div class="option-item <%= q.correct_answer == 1 ? 'correct' : '' %>">
-                            <strong>A.</strong> <%= q.option1 %>
-                            <% if (q.correct_answer == 1) { %> <i class="bi bi-check-circle-fill"></i><% } %>
-                        </div>
-                        <div class="option-item <%= q.correct_answer == 2 ? 'correct' : '' %>">
-                            <strong>B.</strong> <%= q.option2 %>
-                            <% if (q.correct_answer == 2) { %> <i class="bi bi-check-circle-fill"></i><% } %>
-                        </div>
-                        <div class="option-item <%= q.correct_answer == 3 ? 'correct' : '' %>">
-                            <strong>C.</strong> <%= q.option3 %>
-                            <% if (q.correct_answer == 3) { %> <i class="bi bi-check-circle-fill"></i><% } %>
-                        </div>
-                        <div class="option-item <%= q.correct_answer == 4 ? 'correct' : '' %>">
-                            <strong>D.</strong> <%= q.option4 %>
-                            <% if (q.correct_answer == 4) { %> <i class="bi bi-check-circle-fill"></i><% } %>
-                        </div>
-                    </div>
-
-                    <% if (q.solution) { %>
-                        <div class="solution-text">
-                            <strong style="color: var(--royal-gold);">Solution:</strong> <%= q.solution %>
-                        </div>
-                    <% } %>
-
-                    <div class="meta-badges">
-                        <% if (q.concept_name) { %>
-                            <span class="meta-badge">
-                                <i class="bi bi-tag"></i> <%= q.concept_name %>
-                                <% if (q.concept_confidence != null) { %>
-                                    <span class="confidence-bar">
-                                        <span class="confidence-fill" style="width: <%= (q.concept_confidence * 100) %>%; background: <%= q.concept_confidence >= 0.6 ? '#86EFAC' : '#FCA5A5' %>;"></span>
-                                    </span>
-                                    <%= (q.concept_confidence * 100).toFixed(0) %>%
-                                <% } %>
-                            </span>
-                        <% } else { %>
-                            <span class="meta-badge review-flag"><i class="bi bi-tag"></i> No concept assigned</span>
-                        <% } %>
-                        <span class="meta-badge"><i class="bi bi-speedometer2"></i> Tier <%= q.difficulty_tier || 2 %></span>
-                        <% if (q.needs_review_tag) { %>
-                            <span class="meta-badge review-flag"><i class="bi bi-exclamation-triangle"></i> Needs Review</span>
-                        <% } %>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="d-flex gap-2 flex-wrap">
-                        <form method="POST" action="/institute/questions/review/<%= q.id %>" style="display:inline;">
-                            <input type="hidden" name="action" value="approve">
-                            <button type="submit" class="btn btn-approve"><i class="bi bi-check-lg me-1"></i> Approve</button>
-                        </form>
-                        <form method="POST" action="/institute/questions/review/<%= q.id %>" style="display:inline;">
-                            <input type="hidden" name="action" value="reject">
-                            <button type="submit" class="btn btn-reject"><i class="bi bi-x-lg me-1"></i> Reject</button>
-                        </form>
-                        <button type="button" class="btn btn-edit-toggle" onclick="toggleEdit(<%= q.id %>)">
-                            <i class="bi bi-pencil me-1"></i> Edit & Approve
-                        </button>
-                    </div>
-
-                    <!-- Edit Panel (collapsible) -->
-                    <div class="edit-panel" id="edit-panel-<%= q.id %>">
-                        <form method="POST" action="/institute/questions/review/<%= q.id %>">
-                            <input type="hidden" name="action" value="edit">
-                            <div class="mb-3">
-                                <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Question Text</label>
-                                <textarea class="form-control" name="question_text" rows="3"><%= q.question_text %></textarea>
-                            </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Concept</label>
-                                    <select class="form-select" name="concept_id">
-                                        <option value="">-- Select Concept --</option>
-                                        <% concepts.forEach(function(c) { %>
-                                            <option value="<%= c.id %>" <%= q.concept_id == c.id ? 'selected' : '' %>><%= c.name %></option>
-                                        <% }); %>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Difficulty Tier</label>
-                                    <select class="form-select" name="difficulty_tier">
-                                        <option value="1" <%= q.difficulty_tier == 1 ? 'selected' : '' %>>1 — Easy</option>
-                                        <option value="2" <%= (q.difficulty_tier == 2 || !q.difficulty_tier) ? 'selected' : '' %>>2 — Medium</option>
-                                        <option value="3" <%= q.difficulty_tier == 3 ? 'selected' : '' %>>3 — Hard</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-save-edit"><i class="bi bi-check2-circle me-1"></i> Save & Approve</button>
-                        </form>
-                    </div>
+            <div class="question-card-review">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span style="color: var(--text-muted); font-size: 0.8rem;">#<%= q.id %></span>
+                    <span style="color: var(--text-muted); font-size: 0.8rem;"><%= new Date(q.created_at).toLocaleDateString() %></span>
                 </div>
+                <div class="question-text"><%= q.question_text %></div>
+                <div class="options-grid">
+                    <div class="option-item <%= q.correct_answer == 1 ? 'correct' : '' %>"><strong>A.</strong> <%= q.option1 %><% if (q.correct_answer == 1) { %> <i class="bi bi-check-circle-fill"></i><% } %></div>
+                    <div class="option-item <%= q.correct_answer == 2 ? 'correct' : '' %>"><strong>B.</strong> <%= q.option2 %><% if (q.correct_answer == 2) { %> <i class="bi bi-check-circle-fill"></i><% } %></div>
+                    <div class="option-item <%= q.correct_answer == 3 ? 'correct' : '' %>"><strong>C.</strong> <%= q.option3 %><% if (q.correct_answer == 3) { %> <i class="bi bi-check-circle-fill"></i><% } %></div>
+                    <div class="option-item <%= q.correct_answer == 4 ? 'correct' : '' %>"><strong>D.</strong> <%= q.option4 %><% if (q.correct_answer == 4) { %> <i class="bi bi-check-circle-fill"></i><% } %></div>
+                </div>
+                <% if (q.solution) { %>
+                    <div class="solution-text"><strong style="color: var(--gold);">Solution:</strong> <%= q.solution %></div>
+                <% } %>
+                <div class="meta-badges">
+                    <% if (q.concept_name) { %>
+                        <span class="meta-badge"><i class="bi bi-tag"></i> <%= q.concept_name %>
+                            <% if (q.concept_confidence != null) { %>
+                                <span class="confidence-bar"><span class="confidence-fill" style="width: <%= (q.concept_confidence * 100) %>%; background: <%= q.concept_confidence >= 0.6 ? 'var(--green-light)' : 'var(--red-light)' %>;"></span></span>
+                                <%= (q.concept_confidence * 100).toFixed(0) %>%
+                            <% } %>
+                        </span>
+                    <% } else { %>
+                        <span class="meta-badge review-flag"><i class="bi bi-tag"></i> No concept assigned</span>
+                    <% } %>
+                    <span class="meta-badge"><i class="bi bi-speedometer2"></i> Tier <%= q.difficulty_tier || 2 %></span>
+                    <% if (q.needs_review_tag) { %>
+                        <span class="meta-badge review-flag"><i class="bi bi-exclamation-triangle"></i> Needs Review</span>
+                    <% } %>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <form method="POST" action="/institute/questions/review/<%= q.id %>" style="display:inline;"><input type="hidden" name="action" value="approve"><button type="submit" class="btn-approve"><i class="bi bi-check-lg me-1"></i> Approve</button></form>
+                    <form method="POST" action="/institute/questions/review/<%= q.id %>" style="display:inline;"><input type="hidden" name="action" value="reject"><button type="submit" class="btn-reject"><i class="bi bi-x-lg me-1"></i> Reject</button></form>
+                    <button type="button" class="btn-edit-toggle" onclick="toggleEdit(<%= q.id %>)"><i class="bi bi-pencil me-1"></i> Edit & Approve</button>
+                </div>
+                <div class="edit-panel" id="edit-panel-<%= q.id %>">
+                    <form method="POST" action="/institute/questions/review/<%= q.id %>">
+                        <input type="hidden" name="action" value="edit">
+                        <div class="mb-3">
+                            <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Question Text</label>
+                            <textarea class="form-control" name="question_text" rows="3"><%= q.question_text %></textarea>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Concept</label>
+                                <select class="form-select" name="concept_id">
+                                    <option value="">-- Select Concept --</option>
+                                    <% concepts.forEach(function(c) { %><option value="<%= c.id %>" <%= q.concept_id == c.id ? 'selected' : '' %>><%= c.name %></option><% }); %>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" style="color: var(--text-secondary); font-size: 0.85rem;">Difficulty Tier</label>
+                                <select class="form-select" name="difficulty_tier">
+                                    <option value="1" <%= q.difficulty_tier == 1 ? 'selected' : '' %>>1 — Easy</option>
+                                    <option value="2" <%= (q.difficulty_tier == 2 || !q.difficulty_tier) ? 'selected' : '' %>>2 — Medium</option>
+                                    <option value="3" <%= q.difficulty_tier == 3 ? 'selected' : '' %>>3 — Hard</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-save-edit"><i class="bi bi-check2-circle me-1"></i> Save & Approve</button>
+                    </form>
+                </div>
+            </div>
             <% }); %>
         <% } %>
     </div>
 
     <script>
-        function toggleEdit(questionId) {
-            const panel = document.getElementById('edit-panel-' + questionId);
-            panel.classList.toggle('active');
-        }
+    function toggleEdit(questionId) {
+        const panel = document.getElementById('edit-panel-' + questionId);
+        panel.classList.toggle('active');
+    }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

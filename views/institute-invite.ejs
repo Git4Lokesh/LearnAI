@@ -3,121 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invite Users - AI Study Generator</title>
+    <title>Invite Users - Learn.ai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
     <style>
-        :root {
-            --royal-purple: #7C3AED;
-            --royal-blue: #2563EB;
-            --royal-gold: #F59E0B;
-            --dark-bg: #0F172A;
-            --dark-card: #1E293B;
-            --dark-border: #334155;
-            --text-primary: #F8FAFC;
-            --text-secondary: #CBD5E1;
-            --text-muted: #94A3B8;
-        }
-        body {
-            background: var(--dark-bg);
-            color: var(--text-primary);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh;
-        }
-        .page-header {
-            background: linear-gradient(135deg, #312E81 0%, #7C3AED 100%);
-            padding: 2rem 0;
-            border-bottom: 2px solid var(--royal-gold);
-        }
-        .page-header h1 { color: var(--royal-gold); font-weight: 700; }
+        /* Page-specific: invite card centered layout */
         .invite-card {
-            background: var(--dark-card);
-            border: 2px solid var(--royal-purple);
-            border-radius: 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
             padding: 2.5rem;
             max-width: 520px;
             margin: 2rem auto;
-            box-shadow: 0 20px 40px rgba(124, 58, 237, 0.3);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            box-shadow: var(--shadow-xl), var(--shadow-glow-purple);
         }
-        .form-control, .form-select {
-            background: rgba(15, 23, 42, 0.8);
-            border: 2px solid var(--dark-border);
-            border-radius: 12px;
-            color: var(--text-primary);
-            font-size: 1rem;
-            padding: 1rem;
-            transition: all 0.3s ease;
-        }
-        .form-control:focus, .form-select:focus {
-            background: rgba(15, 23, 42, 0.9);
-            border-color: var(--royal-gold);
-            box-shadow: 0 0 0 0.25rem rgba(245, 158, 11, 0.25);
-            color: var(--text-primary);
-        }
+        .form-control, .form-select { background: rgba(10,15,30,0.8); border: 2px solid var(--border-light); border-radius: 12px; color: var(--text); font-size: 1rem; padding: 1rem; transition: var(--transition-slow); }
+        .form-control:focus, .form-select:focus { background: rgba(10,15,30,0.9); border-color: var(--gold); box-shadow: 0 0 0 0.25rem rgba(245,158,11,0.25); color: var(--text); }
         .form-control::placeholder { color: var(--text-muted); }
-        .form-select option { background: var(--dark-card); color: var(--text-primary); }
-        .form-floating label { color: var(--text-muted); }
-        .btn-invite {
-            background: linear-gradient(135deg, var(--royal-purple) 0%, var(--royal-blue) 100%);
-            border: 2px solid var(--royal-gold);
-            color: white;
-            font-weight: 600;
-            padding: 1rem 2rem;
-            border-radius: 12px;
-            width: 100%;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-        }
-        .btn-invite:hover {
-            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(124, 58, 237, 0.5);
-            color: white;
-        }
-        .alert-danger {
-            background: rgba(220, 38, 38, 0.15);
-            border: 1px solid rgba(220, 38, 38, 0.4);
-            color: #FCA5A5;
-            border-radius: 12px;
-        }
-        .alert-success {
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            color: #86EFAC;
-            border-radius: 12px;
-        }
-        .section-label {
-            color: var(--royal-gold);
-            font-weight: 600;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.75rem;
-        }
+        .form-select option { background: var(--card); color: var(--text); }
     </style>
 </head>
-<body>
+<body class="bg-alt">
     <div class="page-header">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
                 <h1><i class="bi bi-person-plus me-2"></i>Invite Users</h1>
-                <a href="/institute/dashboard" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
+                <a href="/" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
             </div>
         </div>
     </div>
 
     <div class="container">
-        <div class="invite-card">
+        <div class="invite-card animate-in">
             <div class="section-label">Add a Teacher or Student</div>
 
             <% if (typeof error !== 'undefined' && error) { %>
-                <div class="alert alert-danger" role="alert">
+                <div class="alert-dark-danger p-3 mb-3" role="alert">
                     <i class="bi bi-exclamation-triangle me-2"></i><%= error %>
                 </div>
             <% } %>
-
             <% if (typeof success !== 'undefined' && success) { %>
-                <div class="alert alert-success" role="alert">
+                <div class="alert-dark-success p-3 mb-3" role="alert">
                     <i class="bi bi-check-circle me-2"></i><%= success %>
                 </div>
             <% } %>
@@ -127,17 +56,14 @@
                     <input type="text" class="form-control" id="name" name="name" placeholder="Full Name" required>
                     <label for="name">Full Name</label>
                 </div>
-
                 <div class="form-floating mb-3">
                     <input type="email" class="form-control" id="email" name="email" placeholder="user@example.com" required>
                     <label for="email">Email Address</label>
                 </div>
-
                 <div class="form-floating mb-3">
                     <input type="password" class="form-control" id="password" name="password" placeholder="Temporary Password" required minlength="6">
                     <label for="password">Temporary Password</label>
                 </div>
-
                 <div class="form-floating mb-4">
                     <select class="form-select" id="role" name="role" required>
                         <option value="teacher">Teacher</option>
@@ -145,8 +71,7 @@
                     </select>
                     <label for="role">Role</label>
                 </div>
-
-                <button type="submit" class="btn btn-invite">
+                <button type="submit" class="btn-auth btn-auth--gold-border">
                     <i class="bi bi-send me-2"></i>Create User
                 </button>
             </form>
