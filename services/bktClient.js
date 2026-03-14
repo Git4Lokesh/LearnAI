@@ -27,3 +27,33 @@ export async function bktNextConcept({ userId, subject = null }) {
     }, { timeout: 5000 });
     return data;
 }
+
+// ── EM Parameter Learning ──
+
+export async function bktFit(triggeredBy = 'admin') {
+    const { data } = await axios.post(`${baseUrl}/fit`, null, {
+        params: { triggered_by: triggeredBy },
+        timeout: 120000  // EM can take a while
+    });
+    return data;
+}
+
+export async function bktFitDry() {
+    const { data } = await axios.post(`${baseUrl}/fit-dry`, null, { timeout: 120000 });
+    return data;
+}
+
+export async function bktGetParams(conceptId) {
+    const { data } = await axios.get(`${baseUrl}/params/${conceptId}`, { timeout: 5000 });
+    return data;
+}
+
+export async function bktGetAllParams() {
+    const { data } = await axios.get(`${baseUrl}/params`, { timeout: 5000 });
+    return data;
+}
+
+export async function bktReloadParams() {
+    const { data } = await axios.post(`${baseUrl}/reload-params`, null, { timeout: 5000 });
+    return data;
+}

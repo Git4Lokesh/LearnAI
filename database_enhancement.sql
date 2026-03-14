@@ -1,19 +1,24 @@
--- Add user question attempts table for spaced repetition and error analysis
+-- 1. Create the table without inline indexes
 CREATE TABLE IF NOT EXISTS user_question_attempts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     correct BOOLEAN NOT NULL,
     time_taken_seconds INTEGER,
-    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX(user_id, question_id),
-    INDEX(user_id, attempted_at)
+    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Enhanced practice route with prerequisite checking
+-- 2. Create the indexes separately
+CREATE INDEX idx_user_question_attempts_user_question 
+    ON user_question_attempts(user_id, question_id);
+
+CREATE INDEX idx_user_question_attempts_user_attempted 
+    ON user_question_attempts(user_id, attempted_at);
+
+-- 3. Enhanced practice route function
 CREATE OR REPLACE FUNCTION get_next_concept_with_prerequisites(p_user_id INTEGER, p_subject VARCHAR DEFAULT 'physics')
 RETURNS TABLE(
-    concept_id VARCHAR,
+    concept_id VARCHAR, -- Change to INTEGER if concepts.id is an INT
     concept_name VARCHAR,
     mastery DECIMAL,
     has_prerequisite_gaps BOOLEAN,
