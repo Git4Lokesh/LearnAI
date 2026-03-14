@@ -17,26 +17,26 @@
     <style>
         :root { --muted: var(--text-dim); }
         body { min-height: 100vh; }
-        nav { background: rgba(17,24,39,0.95); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px); }
+        nav { background: rgba(17,24,39,0.8); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
         .brand { color: var(--gold); font-weight: 700; font-size: 1.1rem; text-decoration: none; display: flex; align-items: center; gap: 8px; }
-        .back-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
-        .back-btn:hover { border-color: var(--purple); color: var(--text); }
+        .back-btn { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.08); color: var(--muted); border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .back-btn:hover { border-color: var(--purple); color: var(--text); background: rgba(124,58,237,0.1); }
 
         .container { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
 
         .concept-header { margin-bottom: 2rem; }
-        .concept-header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .concept-header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; background: linear-gradient(135deg, var(--text), var(--text-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .concept-header p { color: var(--muted); font-size: 0.85rem; }
 
-        .mastery-bar-wrap { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .mastery-bar-wrap { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
         .mastery-bar-wrap .label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
         .mastery-bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
         .mastery-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-        .mastery-pct { font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+        .mastery-pct { font-size: 0.9rem; font-weight: 600; white-space: nowrap; text-shadow: 0 0 12px rgba(124,58,237,0.2); }
 
         .question-card { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.75rem; margin-bottom: 1.5rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 6px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15); }
         .q-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
-        .tier-badge { font-size: 0.7rem; padding: 2px 10px; border-radius: 20px; font-weight: 600; }
+        .tier-badge { font-size: 0.7rem; padding: 2px 10px; border-radius: 20px; font-weight: 600; backdrop-filter: blur(4px); }
         .tier-1 { background: rgba(16,185,129,0.15); color: #10B981; }
         .tier-2 { background: rgba(245,158,11,0.15); color: #F59E0B; }
         .tier-3 { background: rgba(239,68,68,0.15); color: #EF4444; }
@@ -46,12 +46,12 @@
 
         .options { display: flex; flex-direction: column; gap: 10px; }
         .option-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.25s ease; }
-        .option-label:hover { border-color: rgba(124,58,237,0.4); background: rgba(124,58,237,0.05); box-shadow: 0 0 0 1px rgba(124,58,237,0.1); }
+        .option-label:hover { border-color: rgba(124,58,237,0.4); background: rgba(124,58,237,0.05); box-shadow: 0 0 0 1px rgba(124,58,237,0.1), 0 4px 12px rgba(124,58,237,0.08); transform: translateY(-1px); }
         .option-label input { display: none; }
-        .option-label.selected { border-color: var(--purple); background: rgba(124,58,237,0.1); }
-        .option-label.correct { border-color: #10B981; background: rgba(16,185,129,0.1); }
-        .option-label.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
-        .option-key { width: 24px; height: 24px; border-radius: 6px; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0; margin-top: 1px; }
+        .option-label.selected { border-color: var(--purple); background: rgba(124,58,237,0.1); box-shadow: 0 0 16px rgba(124,58,237,0.15); }
+        .option-label.correct { border-color: #10B981; background: rgba(16,185,129,0.1); box-shadow: 0 0 16px rgba(16,185,129,0.15); }
+        .option-label.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); box-shadow: 0 0 16px rgba(239,68,68,0.1); }
+        .option-key { width: 24px; height: 24px; border-radius: 6px; background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; flex-shrink: 0; margin-top: 1px; }
         .option-text { font-size: 0.9rem; line-height: 1.5; }
 
         .feedback { border-radius: 10px; padding: 12px 16px; margin-top: 1rem; font-size: 0.88rem; display: none; }
@@ -61,11 +61,13 @@
 
         .actions { display: flex; gap: 10px; margin-top: 1.5rem; }
         .btn-submit { background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; color: white; padding: 10px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden; }
-        .btn-submit:hover { box-shadow: 0 8px 24px rgba(124,58,237,0.4); transform: translateY(-1px); }
+        .btn-submit::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent); opacity: 0; transition: opacity 0.3s ease; }
+        .btn-submit:hover::before { opacity: 1; }
+        .btn-submit:hover { box-shadow: 0 8px 24px rgba(124,58,237,0.4); transform: translateY(-2px); }
         .btn-submit:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
         .btn-submit:active { transform: translateY(0); }
-        .btn-next { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 24px; border-radius: 10px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: none; }
-        .btn-next:hover { border-color: var(--purple); }
+        .btn-next { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.08); color: var(--text); padding: 10px 24px; border-radius: 10px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: none; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .btn-next:hover { border-color: var(--purple); background: rgba(124,58,237,0.1); transform: translateY(-1px); }
 
         .no-questions { text-align: center; padding: 4rem 2rem; color: var(--muted); }
         .no-questions i { font-size: 3rem; display: block; margin-bottom: 1rem; }
@@ -75,11 +77,11 @@
         .prereq-link { display: inline-block; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); border-radius: 6px; padding: 2px 8px; margin: 2px; font-size: 0.75rem; text-decoration: none; transition: all 0.2s; }
         .prereq-link:hover { background: rgba(245,158,11,0.25); transform: translateY(-1px); }
 
-        .session-summary { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.75rem; text-align: center; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 6px rgba(0,0,0,0.25); }
+        .session-summary { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.75rem; text-align: center; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(124,58,237,0.08); }
         .session-summary h3 { margin-bottom: 1.5rem; }
         .summary-stats { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem; }
         .stat { display: flex; flex-direction: column; align-items: center; }
-        .stat-val { font-size: 1.8rem; font-weight: 700; }
+        .stat-val { font-size: 1.8rem; font-weight: 700; text-shadow: 0 0 16px rgba(124,58,237,0.2); }
         .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
         .mastery-delta { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; }
 
@@ -135,7 +137,7 @@
     </p>
     <% } %>
 
-    <div class="mastered-banner" id="masteredBanner" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:1.5rem;text-align:center;margin-bottom:1.5rem;display:none">
+    <div class="mastered-banner" id="masteredBanner" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:1.5rem;text-align:center;margin-bottom:1.5rem;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 0 20px rgba(16,185,129,0.1)">
         <h4 style="color:#10B981">🎉 Concept Mastered!</h4>
         <p style="color:var(--muted);font-size:0.85rem;margin:0">You've reached 80%+ mastery. Adjacent concepts may now be unlocked.</p>
     </div>
