@@ -35,9 +35,9 @@
         /* Graph containers */
         .graph-container { background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 16px; overflow: hidden; }
         .graph-canvas { width: 100%; height: 500px; }
-        .graph-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--dark-border); display: flex; justify-content: space-between; align-items: center; }
+        .graph-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--dark-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         .graph-header h5 { margin: 0; font-size: 0.95rem; font-weight: 600; }
-        .graph-legend { display: flex; gap: 16px; align-items: center; }
+        .graph-legend { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted); }
         .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
         /* Student selector */
@@ -52,6 +52,23 @@
         .mastery-yellow { background: rgba(245, 158, 11, 0.3); color: #FDE68A; }
         .mastery-green { background: rgba(34, 197, 94, 0.3); color: #86EFAC; }
         .mastery-cell { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 600; font-size: 0.8rem; }
+        /* View mode toggle */
+        .view-mode-toggle { display: flex; gap: 4px; }
+        .view-mode-btn { padding: 6px 16px; font-size: 0.8rem; border: 1px solid var(--dark-border); background: none; color: var(--text-muted); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .view-mode-btn.active { background: var(--royal-gold); border-color: var(--royal-gold); color: #0F172A; font-weight: 600; }
+        .view-mode-btn:hover:not(.active) { border-color: var(--royal-purple); color: var(--text-primary); }
+        /* Breadcrumb */
+        .graph-breadcrumb { padding: 0.5rem 1.25rem; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid var(--dark-border); font-size: 0.82rem; display: none; }
+        .graph-breadcrumb.show { display: block; }
+        .graph-breadcrumb a { color: var(--royal-purple); text-decoration: none; cursor: pointer; }
+        .graph-breadcrumb a:hover { color: var(--royal-gold); }
+        .graph-breadcrumb .separator { margin: 0 8px; color: var(--text-muted); }
+        .graph-breadcrumb .current-chapter { color: var(--text-secondary); }
+        /* Loading indicator */
+        .graph-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); display: none; z-index: 10; }
+        .graph-loading.show { display: block; }
+        .graph-loading .spinner { width: 36px; height: 36px; border: 3px solid var(--dark-border); border-top-color: var(--royal-purple); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -114,7 +131,17 @@
         <% } else if (heatmapData) { %>
             <!-- Student Selector -->
             <div class="student-selector">
-                <div class="section-title"><i class="bi bi-people me-2"></i>View Knowledge Graph For</div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="section-title mb-0"><i class="bi bi-people me-2"></i>View Knowledge Graph For</div>
+                    <div class="view-mode-toggle">
+                        <button class="view-mode-btn active" data-view="chapters" onclick="switchViewMode('chapters')">
+                            <i class="bi bi-grid-3x3-gap me-1"></i>Chapters
+                        </button>
+                        <button class="view-mode-btn" data-view="concepts" onclick="switchViewMode('concepts')">
+                            <i class="bi bi-diagram-3 me-1"></i>Concepts
+                        </button>
+                    </div>
+                </div>
                 <span class="student-chip batch-avg active" data-student="batch-avg" onclick="selectStudent('batch-avg')">
                     <i class="bi bi-bar-chart me-1"></i>Batch Average
                 </span>
@@ -126,16 +153,29 @@
             </div>
 
             <!-- Knowledge Graph -->
-            <div class="graph-container">
+            <div class="graph-container" style="position: relative;">
                 <div class="graph-header">
-                    <h5 id="graphTitle"><i class="bi bi-diagram-3 me-2"></i>Batch Average Knowledge Graph</h5>
+                    <h5 id="graphTitle"><i class="bi bi-grid-3x3-gap me-2"></i>Batch Average — Chapter Overview</h5>
                     <div class="graph-legend">
-                        <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div> Mastered (≥70%)</div>
-                        <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> In Progress (40-70%)</div>
-                        <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div> Weak (&lt;40%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div> Mastered (≥80%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> In Progress (50-80%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div> Weak (&lt;50%)</div>
+                        <div class="legend-item"><div class="legend-dot" style="background:#6B7280"></div> No Data</div>
+                        <div class="legend-item"><div style="width:24px;height:2px;border-top:2px dashed #A855F7;flex-shrink:0"></div> Cross-Chapter Dep.</div>
                     </div>
                 </div>
-                <div class="graph-canvas" id="knowledgeGraph"></div>
+                <div class="graph-breadcrumb" id="graphBreadcrumb">
+                    <a onclick="navigateBackToMacro()">All Chapters</a>
+                    <span class="separator">›</span>
+                    <span class="current-chapter" id="breadcrumbChapterName">—</span>
+                </div>
+                <div class="graph-loading" id="graphLoading">
+                    <div class="spinner"></div>
+                    <div>Loading graph data...</div>
+                </div>
+                <div class="graph-canvas" id="macroGraphCanvas"></div>
+                <div class="graph-canvas" id="microGraphCanvas" style="display:none;"></div>
+                <div class="graph-canvas" id="knowledgeGraph" style="display:none;"></div>
             </div>
         <% } %>
 
@@ -185,22 +225,504 @@
         // Data from server
         const heatmapData = <%- JSON.stringify(heatmapData || null) %>;
         const prereqs = <%- JSON.stringify(prereqs || []) %>;
-        let network = null;
-        let currentView = 'batch-avg';
+        const selectedBatchId = '<%= selectedBatchId || "" %>';
+        const selectedSubject = '<%= selectedSubject || "" %>';
 
-        function masteryColor(m) {
+        let macroNetwork = null;
+        let microNetwork = null;
+        let conceptNetwork = null;
+        let currentStudentView = 'batch-avg';
+        let currentViewMode = 'chapters'; // 'chapters' or 'concepts'
+        let currentDrillChapter = null;
+
+        // Cached data for macro graph
+        let cachedChaptersData = null;
+        let cachedBatchMastery = null;
+        let cachedUserMasteryMap = {}; // userId -> mastery data
+
+        // ===== Color helpers =====
+        function chapterMasteryColor(m) {
+            if (m === null || m === undefined) return '#6B7280';
+            if (m >= 0.8) return '#10B981';
+            if (m >= 0.5) return '#F59E0B';
+            return '#EF4444';
+        }
+
+        function conceptMasteryColor(m) {
             if (m >= 0.7) return '#10B981';
             if (m >= 0.4) return '#F59E0B';
             return '#EF4444';
         }
 
-        function buildGraphData(masteryMap) {
-            if (!heatmapData) return { nodes: [], edges: [] };
+        // ===== Loading indicator =====
+        function showGraphLoading() {
+            const el = document.getElementById('graphLoading');
+            if (el) el.classList.add('show');
+        }
+        function hideGraphLoading() {
+            const el = document.getElementById('graphLoading');
+            if (el) el.classList.remove('show');
+        }
+
+        // ===== View mode switching =====
+        function switchViewMode(mode) {
+            currentViewMode = mode;
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === mode);
+            });
+
+            // Reset drill-down state
+            currentDrillChapter = null;
+            document.getElementById('graphBreadcrumb').classList.remove('show');
+
+            if (mode === 'chapters') {
+                document.getElementById('macroGraphCanvas').style.display = 'block';
+                document.getElementById('microGraphCanvas').style.display = 'none';
+                document.getElementById('knowledgeGraph').style.display = 'none';
+                renderTeacherMacroGraph();
+            } else {
+                document.getElementById('macroGraphCanvas').style.display = 'none';
+                document.getElementById('microGraphCanvas').style.display = 'none';
+                document.getElementById('knowledgeGraph').style.display = 'block';
+                renderConceptGraph();
+            }
+        }
+
+        // ===== Student selection =====
+        function selectStudent(studentId) {
+            currentStudentView = studentId;
+            document.querySelectorAll('.student-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.student === studentId);
+            });
+
+            if (!heatmapData) return;
+
+            if (currentViewMode === 'chapters') {
+                // Reset to macro view when switching students
+                currentDrillChapter = null;
+                document.getElementById('graphBreadcrumb').classList.remove('show');
+                document.getElementById('macroGraphCanvas').style.display = 'block';
+                document.getElementById('microGraphCanvas').style.display = 'none';
+                renderTeacherMacroGraph();
+            } else {
+                renderConceptGraph();
+            }
+        }
+
+        // ===== Macro Graph (Chapter-level) =====
+        async function fetchChaptersData() {
+            if (cachedChaptersData) return cachedChaptersData;
+            const response = await fetch('/api/chapters');
+            if (!response.ok) throw new Error('Failed to fetch chapters');
+            cachedChaptersData = await response.json();
+            return cachedChaptersData;
+        }
+
+        async function fetchBatchChapterMastery(batchId) {
+            const response = await fetch(`/api/batch/${batchId}/chapter-mastery`);
+            if (!response.ok) throw new Error('Failed to fetch batch chapter mastery');
+            return await response.json();
+        }
+
+        async function fetchUserChapterMastery(userId) {
+            if (cachedUserMasteryMap[userId]) return cachedUserMasteryMap[userId];
+            const response = await fetch(`/api/user/${userId}/chapter-mastery`);
+            if (!response.ok) throw new Error('Failed to fetch user chapter mastery');
+            const data = await response.json();
+            cachedUserMasteryMap[userId] = data;
+            return data;
+        }
+
+        async function renderTeacherMacroGraph() {
+            if (!selectedBatchId) return;
+            showGraphLoading();
+
+            try {
+                // Check if vis-network loaded successfully
+                if (typeof vis === 'undefined' || typeof vis.Network === 'undefined') {
+                    hideGraphLoading();
+                    const container = document.getElementById('macroGraphCanvas');
+                    container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                        '<i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                        'Graph visualization unavailable. Please refresh the page or check your internet connection.</div>';
+                    return;
+                }
+                
+                const chaptersData = await fetchChaptersData();
+
+                // Get mastery data based on current student selection with BKT unavailability handling
+                let masteryMap = {};
+                let titlePrefix = '';
+                let bktWarning = false;
+
+                if (currentStudentView === 'batch-avg') {
+                    try {
+                        const batchMastery = await fetchBatchChapterMastery(selectedBatchId);
+                        cachedBatchMastery = batchMastery;
+                        (batchMastery.chapterMastery || []).forEach(m => {
+                            masteryMap[m.chapter_id] = m.avg_mastery !== undefined ? m.avg_mastery : m.mastery;
+                        });
+                    } catch (masteryError) {
+                        console.warn('BKT service may be unavailable:', masteryError);
+                        bktWarning = true;
+                        if (cachedBatchMastery) {
+                            (cachedBatchMastery.chapterMastery || []).forEach(m => {
+                                masteryMap[m.chapter_id] = m.avg_mastery !== undefined ? m.avg_mastery : m.mastery;
+                            });
+                        }
+                    }
+                    titlePrefix = 'Batch Average';
+                } else {
+                    try {
+                        const userMastery = await fetchUserChapterMastery(currentStudentView);
+                        (userMastery.chapterMastery || []).forEach(m => {
+                            masteryMap[m.chapter_id] = m.mastery;
+                        });
+                    } catch (masteryError) {
+                        console.warn('BKT service may be unavailable:', masteryError);
+                        bktWarning = true;
+                    }
+                    const student = heatmapData.students.find(s => String(s.id) === String(currentStudentView));
+                    titlePrefix = student ? student.name : 'Student';
+                }
+                
+                // Check if there's any mastery data
+                const hasMasteryData = Object.keys(masteryMap).length > 0;
+
+                // Filter chapters by subject
+                const filteredChapters = chaptersData.chapters.filter(c => {
+                    if (!selectedSubject) return true;
+                    if (selectedSubject === 'Physics') return c.subject.startsWith('Physics');
+                    if (selectedSubject === 'Mathematics' || selectedSubject === 'Maths') return c.subject.startsWith('Mathematics');
+                    if (selectedSubject === 'Chemistry') return c.subject.startsWith('Chemistry');
+                    return c.subject === selectedSubject || c.subject.startsWith(selectedSubject);
+                });
+
+                // Build nodes
+                const chapterIds = new Set(filteredChapters.map(c => c.id));
+                const nodes = filteredChapters.map(chapter => {
+                    const mastery = masteryMap[chapter.id] !== undefined ? masteryMap[chapter.id] : null;
+                    const color = chapterMasteryColor(mastery);
+                    const size = 20 + (mastery !== null ? Math.round(mastery * 15) : 0);
+                    const pct = mastery !== null ? Math.round(mastery * 100) + '%' : 'No data';
+
+                    return {
+                        id: chapter.id,
+                        label: chapter.name,
+                        title: chapter.name + ' — ' + pct,
+                        color: { background: color, border: color, highlight: { background: color, border: '#F59E0B' } },
+                        font: { color: '#F1F5F9', size: 12, face: 'Inter, system-ui, sans-serif' },
+                        shape: 'dot',
+                        size: size,
+                        mastery: mastery,
+                        chapterData: chapter
+                    };
+                });
+
+                // Build edges (only between visible chapters)
+                const prerequisiteEdges = chaptersData.prerequisites
+                    .filter(p => chapterIds.has(p.chapter_id) && chapterIds.has(p.prereq_id))
+                    .map(p => ({
+                        from: p.prereq_id,
+                        to: p.chapter_id,
+                        arrows: 'to',
+                        color: { color: '#374151', highlight: '#7C3AED' },
+                        width: 2,
+                        smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 }
+                    }));
+
+                // Add bridge edges (cross-chapter concept dependencies) with distinct styling
+                const bridgeEdgeSet = new Set(prerequisiteEdges.map(e => e.from + '->' + e.to));
+                const bridgeEdges = (chaptersData.bridgeEdges || [])
+                    .filter(b => chapterIds.has(b.from_chapter) && chapterIds.has(b.to_chapter))
+                    .filter(b => !bridgeEdgeSet.has(b.from_chapter + '->' + b.to_chapter))
+                    .map(b => ({
+                        from: b.from_chapter,
+                        to: b.to_chapter,
+                        arrows: 'to',
+                        color: { color: '#A855F7', highlight: '#C084FC' },
+                        width: 1.5,
+                        dashes: [8, 4],
+                        title: b.concept_count + ' cross-chapter concept ' + (b.concept_count === 1 ? 'dependency' : 'dependencies'),
+                        smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 }
+                    }));
+
+                const edges = [...prerequisiteEdges, ...bridgeEdges];
+
+                // Render
+                const container = document.getElementById('macroGraphCanvas');
+                if (macroNetwork) macroNetwork.destroy();
+
+                macroNetwork = new vis.Network(container, {
+                    nodes: new vis.DataSet(nodes),
+                    edges: new vis.DataSet(edges)
+                }, {
+                    layout: {
+                        hierarchical: {
+                            enabled: true,
+                            direction: 'LR',
+                            sortMethod: 'directed',
+                            levelSeparation: 200,
+                            nodeSpacing: 100,
+                            treeSpacing: 150,
+                            blockShifting: true,
+                            edgeMinimization: true
+                        }
+                    },
+                    physics: false,
+                    interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+                    nodes: { borderWidth: 2 },
+                    edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 } }
+                });
+
+                // Click handler for drill-down
+                macroNetwork.on('click', params => {
+                    if (params.nodes.length > 0) {
+                        drillDownToChapter(params.nodes[0]);
+                    }
+                });
+
+                document.getElementById('graphTitle').innerHTML =
+                    '<i class="bi bi-grid-3x3-gap me-2"></i>' + titlePrefix + ' — Chapter Overview';
+
+                // Show overlay for no mastery data
+                if (!hasMasteryData) {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;background:rgba(15,23,42,0.85);padding:1.5rem 2rem;border-radius:12px;border:1px solid var(--dark-border);z-index:5;pointer-events:none;';
+                    overlay.innerHTML = '<i class="bi bi-lightbulb" style="font-size:2rem;color:var(--royal-gold);display:block;margin-bottom:0.5rem;"></i>' +
+                        '<div style="color:var(--text-primary);font-size:0.9rem;font-weight:600;margin-bottom:0.25rem;">No mastery data yet</div>' +
+                        '<div style="color:var(--text-muted);font-size:0.8rem;">Students need to start practicing to see progress here</div>';
+                    container.style.position = 'relative';
+                    container.appendChild(overlay);
+                }
+                
+                // Show BKT service warning if applicable
+                if (bktWarning) {
+                    const warning = document.createElement('div');
+                    warning.style.cssText = 'position:absolute;top:8px;right:8px;background:rgba(245,158,11,0.15);border:1px solid var(--royal-gold);padding:6px 12px;border-radius:8px;font-size:0.75rem;color:var(--royal-gold);z-index:5;display:flex;align-items:center;gap:6px;';
+                    warning.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Using cached mastery data';
+                    container.style.position = 'relative';
+                    container.appendChild(warning);
+                }
+
+                hideGraphLoading();
+            } catch (error) {
+                console.error('Failed to render macro graph:', error);
+                hideGraphLoading();
+                const container = document.getElementById('macroGraphCanvas');
+                container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                    '<i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                    'Unable to load chapter graph. Please refresh the page.</div>';
+            }
+        }
+
+        // ===== Micro Graph (Drill-down into a chapter) =====
+        async function drillDownToChapter(chapterId) {
+            currentDrillChapter = chapterId;
+            showGraphLoading();
+
+            // Switch canvases
+            document.getElementById('macroGraphCanvas').style.display = 'none';
+            document.getElementById('microGraphCanvas').style.display = 'block';
+            document.getElementById('knowledgeGraph').style.display = 'none';
+
+            try {
+                // Fetch chapter concepts
+                let url = `/api/chapters/${chapterId}/concepts`;
+                if (currentStudentView !== 'batch-avg') {
+                    url += `?userId=${currentStudentView}`;
+                }
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to fetch chapter concepts');
+                const data = await response.json();
+
+                // Update breadcrumb
+                document.getElementById('breadcrumbChapterName').textContent = data.chapter.name;
+                document.getElementById('graphBreadcrumb').classList.add('show');
+
+                // Update title
+                const titlePrefix = currentStudentView === 'batch-avg' ? 'Batch Average' :
+                    (heatmapData.students.find(s => String(s.id) === String(currentStudentView))?.name || 'Student');
+                document.getElementById('graphTitle').innerHTML =
+                    '<i class="bi bi-diagram-3 me-2"></i>' + titlePrefix + ' — ' + data.chapter.name;
+
+                renderMicroGraph(data);
+                hideGraphLoading();
+            } catch (error) {
+                console.error('Failed to drill down:', error);
+                hideGraphLoading();
+                const container = document.getElementById('microGraphCanvas');
+                container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                    '<i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                    'Unable to load chapter concepts. Please try again.</div>';
+            }
+        }
+
+        function renderMicroGraph(data) {
+            const container = document.getElementById('microGraphCanvas');
+
+            // Check if vis-network loaded successfully
+            if (typeof vis === 'undefined' || typeof vis.Network === 'undefined') {
+                container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                    '<i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                    'Graph visualization unavailable. Please refresh the page or check your internet connection.</div>';
+                return;
+            }
+
+            if (microNetwork) microNetwork.destroy();
+
+            if (!data.concepts || data.concepts.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                    '<i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                    'No concepts available for this chapter</div>';
+                return;
+            }
+
+            // Build mastery map from heatmapData if available
+            let masteryMap = {};
+            if (currentStudentView === 'batch-avg' && heatmapData) {
+                masteryMap = heatmapData.batchAverages || {};
+            } else if (heatmapData) {
+                const student = heatmapData.students.find(s => String(s.id) === String(currentStudentView));
+                if (student) masteryMap = student.masteries || {};
+            }
+
+            // Build regular concept nodes
+            const nodes = data.concepts.map(c => {
+                const m = masteryMap[c.id] !== undefined ? masteryMap[c.id] : 0.2;
+                const color = conceptMasteryColor(m);
+                return {
+                    id: c.id,
+                    label: c.name.length > 22 ? c.name.substring(0, 20) + '…' : c.name,
+                    title: c.name + ' — ' + Math.round(m * 100) + '% mastery',
+                    color: { background: color, border: color, highlight: { background: color, border: '#F59E0B' } },
+                    font: { color: '#F1F5F9', size: 11, face: 'Inter, system-ui, sans-serif' },
+                    shape: 'dot',
+                    size: 16 + Math.round(m * 16),
+                    isGhost: false
+                };
+            });
+
+            // Add ghost nodes
+            const ghostNodes = (data.ghostNodes || []).map(g => {
+                const m = masteryMap[g.id] !== undefined ? masteryMap[g.id] : 0.2;
+                return {
+                    id: g.id,
+                    label: g.name + '\n(' + g.chapter_name + ')',
+                    title: g.name + ' (' + g.chapter_name + ') — ' + Math.round(m * 100) + '%',
+                    color: { background: '#6B7280', border: '#9CA3AF' },
+                    font: { color: '#F1F5F9', size: 10, face: 'Inter, system-ui, sans-serif' },
+                    shape: 'dot',
+                    size: 14,
+                    borderWidth: 2,
+                    borderWidthSelected: 3,
+                    shapeProperties: { borderDashes: [5, 5] },
+                    isGhost: true,
+                    sourceChapterId: g.chapter_id
+                };
+            });
+
+            const allNodes = [...nodes, ...ghostNodes];
+
+            // Build edges
+            const edges = (data.prerequisites || []).map(p => ({
+                from: p.prereq_id,
+                to: p.concept_id,
+                arrows: 'to',
+                color: { color: '#374151', highlight: '#7C3AED' },
+                width: 1.5,
+                smooth: { type: 'curvedCW', roundness: 0.2 }
+            }));
+
+            microNetwork = new vis.Network(container, {
+                nodes: new vis.DataSet(allNodes),
+                edges: new vis.DataSet(edges)
+            }, {
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        direction: 'LR',
+                        sortMethod: 'directed',
+                        levelSeparation: 220,
+                        nodeSpacing: 90,
+                        treeSpacing: 140,
+                        blockShifting: true,
+                        edgeMinimization: true
+                    }
+                },
+                physics: false,
+                interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+                nodes: { borderWidth: 2 },
+                edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 } }
+            });
+
+            // Click handler: ghost nodes navigate to their source chapter
+            microNetwork.on('click', params => {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const nodeData = allNodes.find(n => n.id === nodeId);
+                    if (nodeData && nodeData.isGhost && nodeData.sourceChapterId) {
+                        drillDownToChapter(nodeData.sourceChapterId);
+                    }
+                }
+            });
+        }
+
+        // ===== Navigate back to macro graph =====
+        function navigateBackToMacro() {
+            currentDrillChapter = null;
+            document.getElementById('graphBreadcrumb').classList.remove('show');
+            document.getElementById('macroGraphCanvas').style.display = 'block';
+            document.getElementById('microGraphCanvas').style.display = 'none';
+
+            const titlePrefix = currentStudentView === 'batch-avg' ? 'Batch Average' :
+                (heatmapData.students.find(s => String(s.id) === String(currentStudentView))?.name || 'Student');
+            document.getElementById('graphTitle').innerHTML =
+                '<i class="bi bi-grid-3x3-gap me-2"></i>' + titlePrefix + ' — Chapter Overview';
+
+            // Re-render macro graph if needed
+            if (!macroNetwork) {
+                renderTeacherMacroGraph();
+            }
+        }
+
+        // ===== Concept-level graph (existing behavior) =====
+        function renderConceptGraph() {
+            if (!heatmapData) return;
+
+            // Check if vis-network loaded successfully
+            if (typeof vis === 'undefined' || typeof vis.Network === 'undefined') {
+                const container = document.getElementById('knowledgeGraph');
+                if (container) {
+                    container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">' +
+                        '<i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+                        'Graph visualization unavailable. Please refresh the page or check your internet connection.</div>';
+                }
+                return;
+            }
+
+            let masteryMap = {};
+            let title = '';
+
+            if (currentStudentView === 'batch-avg') {
+                masteryMap = heatmapData.batchAverages;
+                title = 'Batch Average — Concept Graph';
+            } else {
+                const student = heatmapData.students.find(s => String(s.id) === String(currentStudentView));
+                if (student) {
+                    masteryMap = student.masteries;
+                    title = student.name + ' — Concept Graph';
+                }
+            }
+
+            const container = document.getElementById('knowledgeGraph');
+            if (!container) return;
+
             const conceptIds = new Set(heatmapData.concepts.map(c => c.id));
 
             const nodes = heatmapData.concepts.map(c => {
                 const m = masteryMap[c.id] !== undefined ? masteryMap[c.id] : 0.2;
-                const color = masteryColor(m);
+                const color = conceptMasteryColor(m);
                 return {
                     id: c.id,
                     label: c.name.length > 22 ? c.name.substring(0, 20) + '…' : c.name,
@@ -224,17 +746,9 @@
                     smooth: { type: 'curvedCW', roundness: 0.2 }
                 }));
 
-            return { nodes, edges };
-        }
+            if (conceptNetwork) conceptNetwork.destroy();
 
-        function renderGraph(masteryMap, title) {
-            const container = document.getElementById('knowledgeGraph');
-            if (!container) return;
-
-            const { nodes, edges } = buildGraphData(masteryMap);
-            if (network) network.destroy();
-
-            // Topological level assignment for hierarchical layout
+            // Topological level assignment
             const inDegree = {};
             const adjList = {};
             nodes.forEach(n => { inDegree[n.id] = 0; adjList[n.id] = []; });
@@ -256,7 +770,7 @@
             }
             const leveledNodes = nodes.map(n => ({ ...n, level: levelMap[n.id] ?? 0 }));
 
-            network = new vis.Network(container, {
+            conceptNetwork = new vis.Network(container, {
                 nodes: new vis.DataSet(leveledNodes),
                 edges: new vis.DataSet(edges)
             }, {
@@ -281,28 +795,17 @@
             document.getElementById('graphTitle').innerHTML = '<i class="bi bi-diagram-3 me-2"></i>' + title;
         }
 
-        function selectStudent(studentId) {
-            currentView = studentId;
-            // Update chip styles
-            document.querySelectorAll('.student-chip').forEach(chip => {
-                chip.classList.toggle('active', chip.dataset.student === studentId);
-            });
-
-            if (!heatmapData) return;
-
-            if (studentId === 'batch-avg') {
-                renderGraph(heatmapData.batchAverages, 'Batch Average Knowledge Graph');
-            } else {
-                const student = heatmapData.students.find(s => String(s.id) === String(studentId));
-                if (student) {
-                    renderGraph(student.masteries, student.name + ' — Knowledge Graph');
-                }
+        // ===== Keyboard navigation =====
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && currentDrillChapter && currentViewMode === 'chapters') {
+                navigateBackToMacro();
             }
-        }
+        });
 
-        // Initialize with batch average graph
-        if (heatmapData && heatmapData.concepts && heatmapData.concepts.length > 0) {
-            renderGraph(heatmapData.batchAverages, 'Batch Average Knowledge Graph');
+        // ===== Initialize =====
+        if (heatmapData && heatmapData.concepts && heatmapData.concepts.length >= 0 && selectedBatchId) {
+            // Default to chapters (macro) view
+            switchViewMode('chapters');
         }
     </script>
 </body>
