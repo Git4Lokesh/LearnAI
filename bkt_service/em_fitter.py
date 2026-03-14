@@ -60,23 +60,22 @@ def _clamp(value: float, low: float, high: float) -> float:
 # Data Loading
 # ──────────────────────────────────────────────
 
-async def build_sequences(conn, concept_id: str, difficulty_tier: int) -> Tuple[List[List[bool]], int, int]:
+async def build_sequences(conn, concept_id: str) -> Tuple[List[List[Dict]], int, int]:
     """
-    Build per-student binary response sequences for a given concept + tier.
+    Build per-student response sequences for a given concept across ALL tiers, ordered by time.
 
     Returns:
-        sequences: list of lists, each inner list = [True, False, True, ...] for one student
+        sequences: list of lists, each inner list = [{'correct': bool, 'tier': int, 'time': datetime}, ...] for one student
         total_responses: total number of individual responses
         student_count: number of distinct students
     """
     rows = await conn.fetch("""
-        SELECT uqa.user_id, uqa.correct
+        SELECT uqa.user_id, uqa.correct, q.difficulty_tier, uqa.attempted_at
         FROM user_question_attempts uqa
         JOIN questions q ON q.id = uqa.question_id
         WHERE q.concept_id = $1
-          AND q.difficulty_tier = $2
         ORDER BY uqa.user_id, uqa.attempted_at ASC
-    """, concept_id, difficulty_tier)
+    """, concept_id)
 
     if not rows:
         return [], 0, 0
@@ -92,7 +91,11 @@ async def build_sequences(conn, concept_id: str, difficulty_tier: int) -> Tuple[
                 sequences.append(current_seq)
             current_user = row['user_id']
             current_seq = []
-        current_seq.append(bool(row['correct']))
+        current_seq.append({
+            'correct': bool(row['correct']),
+            'tier': row['difficulty_tier'],
+            'time': row['attempted_at']
+        })
 
     # Don't forget last student
     if current_seq and len(current_seq) >= MIN_SEQ_LENGTH:
@@ -116,14 +119,14 @@ def _emission_prob(obs: bool, mastered: bool, p_guess: float, p_slip: float) -> 
         return p_guess if obs else (1 - p_guess)
 
 
-def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
-                       p_guess: float, p_slip: float) -> Tuple[List[float], List[float], float]:
+def _forward_backward(seq: List[Dict], p_init: float, p_learn: float,
+                       p_guess: Dict[int, float], p_slip: Dict[int, float]) -> Tuple[List[float], List[float], float]:
     """
     Run forward-backward algorithm on a single student's response sequence.
 
     Hidden states: 0 = unmastered, 1 = mastered
     Transition: P(mastered_t+1 | unmastered_t) = p_learn
-                P(mastered_t+1 | mastered_t)   = 1.0 (no forgetting in standard BKT)
+                P(mastered_t+1 | mastered_t)   = 1.0 - p_forget (time-decayed based on timestamps)
 
     Returns:
         gamma: posterior P(mastered) at each time step
@@ -137,8 +140,9 @@ def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
     # Forward pass
     alpha = []  # alpha[t] = [P(unmastered, obs_1:t), P(mastered, obs_1:t)]
     # t=0
-    e_unmastered = _emission_prob(seq[0], False, p_guess, p_slip)
-    e_mastered = _emission_prob(seq[0], True, p_guess, p_slip)
+    tier_0 = seq[0]['tier']
+    e_unmastered = _emission_prob(seq[0]['correct'], False, p_guess[tier_0], p_slip[tier_0])
+    e_mastered = _emission_prob(seq[0]['correct'], True, p_guess[tier_0], p_slip[tier_0])
     a0_u = (1 - p_init) * e_unmastered
     a0_m = p_init * e_mastered
     normalizer = a0_u + a0_m
@@ -149,12 +153,23 @@ def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
 
     for t in range(1, T):
         prev_u, prev_m = alpha[t - 1]
+        
+        # Calculate dynamic p_forget based on precise timestamps
+        t_delta = seq[t]['time'] - seq[t-1]['time']
+        days = t_delta.total_seconds() / 86400.0
+        # Formula matches `_decay_mastery`: mastery * e^(-0.05 * days) -> meaning p_forget = 1 - e^(-0.05 * days)
+        p_forget = 1.0 - math.exp(-0.05 * days)
+        
         # Transition
-        pred_u = prev_u * (1 - p_learn)           # stayed unmastered
-        pred_m = prev_u * p_learn + prev_m * 1.0   # learned or stayed mastered
+        # P(unmastered_t+1) = stayed unmastered OR forgot from mastered
+        pred_u = prev_u * (1 - p_learn) + prev_m * p_forget
+        # P(mastered_t+1) = learned from unmastered OR stayed mastered
+        pred_m = prev_u * p_learn + prev_m * (1 - p_forget)
+        
         # Emission
-        e_u = _emission_prob(seq[t], False, p_guess, p_slip)
-        e_m = _emission_prob(seq[t], True, p_guess, p_slip)
+        tier_t = seq[t]['tier']
+        e_u = _emission_prob(seq[t]['correct'], False, p_guess[tier_t], p_slip[tier_t])
+        e_m = _emission_prob(seq[t]['correct'], True, p_guess[tier_t], p_slip[tier_t])
         at_u = pred_u * e_u
         at_m = pred_m * e_m
         normalizer = at_u + at_m
@@ -166,10 +181,16 @@ def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
     # Backward pass
     beta = [(1.0, 1.0)] * T
     for t in range(T - 2, -1, -1):
-        e_u_next = _emission_prob(seq[t + 1], False, p_guess, p_slip)
-        e_m_next = _emission_prob(seq[t + 1], True, p_guess, p_slip)
+        tier_next = seq[t + 1]['tier']
+        e_u_next = _emission_prob(seq[t + 1]['correct'], False, p_guess[tier_next], p_slip[tier_next])
+        e_m_next = _emission_prob(seq[t + 1]['correct'], True, p_guess[tier_next], p_slip[tier_next])
+        
+        # Dynamic p_forget for reverse pass
+        t_delta = seq[t+1]['time'] - seq[t]['time']
+        days = t_delta.total_seconds() / 86400.0
+        p_forget = 1.0 - math.exp(-0.05 * days)
         bt_u = (1 - p_learn) * e_u_next * beta[t + 1][0] + p_learn * e_m_next * beta[t + 1][1]
-        bt_m = 1.0 * e_m_next * beta[t + 1][1]  # mastered stays mastered
+        bt_m = p_forget * e_u_next * beta[t + 1][0] + (1 - p_forget) * e_m_next * beta[t + 1][1]
         normalizer = bt_u + bt_m
         if normalizer < 1e-300:
             normalizer = 1e-300
@@ -188,8 +209,9 @@ def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
     # Xi_learn: P(transition unmastered→mastered at t | all observations)
     xi_learn = []
     for t in range(T - 1):
-        e_u_next = _emission_prob(seq[t + 1], False, p_guess, p_slip)
-        e_m_next = _emission_prob(seq[t + 1], True, p_guess, p_slip)
+        tier_next = seq[t + 1]['tier']
+        e_u_next = _emission_prob(seq[t + 1]['correct'], False, p_guess[tier_next], p_slip[tier_next])
+        e_m_next = _emission_prob(seq[t + 1]['correct'], True, p_guess[tier_next], p_slip[tier_next])
         # P(unmastered_t, mastered_{t+1} | all obs)
         xi_01 = alpha[t][0] * p_learn * e_m_next * beta[t + 1][1]
         # P(unmastered_t, unmastered_{t+1} | all obs)
@@ -203,14 +225,14 @@ def _forward_backward(seq: List[bool], p_init: float, p_learn: float,
     return gamma, xi_learn, log_lik
 
 
-def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
+def em_fit(sequences: List[List[Dict]], init_params: Optional[Dict] = None,
            max_iter: int = EM_MAX_ITER, tol: float = EM_CONVERGENCE) -> Tuple[Dict, float, int]:
     """
     Run EM (Baum-Welch) to fit BKT parameters from multiple student sequences.
 
     Args:
-        sequences: list of per-student binary response lists
-        init_params: optional starting parameters dict with p_init, p_learn, p_guess, p_slip
+        sequences: list of per-student unified response lists
+        init_params: optional starting parameters dict setting p_init, p_learn, and p_guess/p_slip per tier
         max_iter: maximum EM iterations
         tol: convergence tolerance on log-likelihood change
 
@@ -226,10 +248,12 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
     if init_params:
         p_init = init_params.get('p_init', 0.2)
         p_learn = init_params.get('p_learn', 0.15)
-        p_guess = init_params.get('p_guess', 0.2)
-        p_slip = init_params.get('p_slip', 0.1)
+        p_guess = init_params.get('p_guess', {1: 0.35, 2: 0.2, 3: 0.08})
+        p_slip = init_params.get('p_slip', {1: 0.15, 2: 0.1, 3: 0.05})
     else:
-        p_init, p_learn, p_guess, p_slip = 0.2, 0.15, 0.2, 0.1
+        p_init, p_learn = 0.2, 0.15
+        p_guess = {1: 0.35, 2: 0.2, 3: 0.08}
+        p_slip = {1: 0.15, 2: 0.1, 3: 0.05}
 
     prev_ll = -float('inf')
 
@@ -239,9 +263,10 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
         sum_gamma_0 = 0.0       # sum of P(mastered at t=0)
         sum_xi_01 = 0.0         # sum of P(unmastered→mastered transitions)
         sum_gamma_unmastered = 0.0  # sum of P(unmastered) at non-terminal steps
-        sum_correct_unmastered = 0.0  # sum of P(correct AND unmastered)
-        sum_wrong_mastered = 0.0      # sum of P(wrong AND mastered)
-        sum_gamma_all = 0.0     # total gamma for emission re-estimation
+        sum_correct_unmastered = {1: 0.0, 2: 0.0, 3: 0.0}  # sum of P(correct AND unmastered) per tier
+        sum_wrong_mastered = {1: 0.0, 2: 0.0, 3: 0.0}      # sum of P(wrong AND mastered) per tier
+        total_unmastered_tier = {1: 0.0, 2: 0.0, 3: 0.0}   # total unmastered per tier
+        total_mastered_tier = {1: 0.0, 2: 0.0, 3: 0.0}     # total mastered per tier
         total_obs = 0
         total_ll = 0.0
 
@@ -266,11 +291,20 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
             for t in range(T):
                 p_m = gamma[t]
                 p_u = 1 - gamma[t]
-                if seq[t]:  # correct answer
-                    sum_correct_unmastered += p_u   # correct while unmastered = guess
+                tier = seq[t]['tier']
+                if tier not in total_unmastered_tier:
+                    total_unmastered_tier[tier] = 0.0
+                    total_mastered_tier[tier] = 0.0
+                    sum_correct_unmastered[tier] = 0.0
+                    sum_wrong_mastered[tier] = 0.0
+
+                total_unmastered_tier[tier] += p_u
+                total_mastered_tier[tier] += p_m
+
+                if seq[t]['correct']:  # correct answer
+                    sum_correct_unmastered[tier] += p_u   # correct while unmastered = guess
                 else:       # wrong answer
-                    sum_wrong_mastered += p_m         # wrong while mastered = slip
-                sum_gamma_all += 1
+                    sum_wrong_mastered[tier] += p_m         # wrong while mastered = slip
             total_obs += T
 
         # ──── M-step ────
@@ -287,29 +321,34 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
             new_p_learn = p_learn
         new_p_learn = _clamp(new_p_learn, *BOUNDS['p_learn'])
 
-        # p_guess = P(correct | unmastered)
-        total_unmastered = sum(1 - g for seq in sequences for g in
-                               _forward_backward(seq, p_init, p_learn, p_guess, p_slip)[0])
-        if total_unmastered > 1e-10:
-            new_p_guess = sum_correct_unmastered / total_unmastered
-        else:
-            new_p_guess = p_guess
-
-        # p_slip = P(wrong | mastered)
-        total_mastered = total_obs - total_unmastered
-        if total_mastered > 1e-10:
-            new_p_slip = sum_wrong_mastered / total_mastered
-        else:
-            new_p_slip = p_slip
-
-        # Enforce constraints
-        new_p_guess = _clamp(new_p_guess, *BOUNDS['p_guess'])
-        new_p_slip = _clamp(new_p_slip, *BOUNDS['p_slip'])
-
-        # Sanity: p_guess should not exceed (1 - p_slip), otherwise model is degenerate
-        if new_p_guess + new_p_slip > 0.9:
-            new_p_guess = min(new_p_guess, 0.45)
-            new_p_slip = min(new_p_slip, 0.20)
+        # p_guess and p_slip per tier
+        new_p_guess = {}
+        new_p_slip = {}
+        
+        for tier in [1, 2, 3]:
+            # Guess
+            if total_unmastered_tier[tier] > 1e-10:
+                new_pg = sum_correct_unmastered[tier] / total_unmastered_tier[tier]
+            else:
+                new_pg = p_guess.get(tier, 0.2)
+                
+            # Slip
+            if total_mastered_tier[tier] > 1e-10:
+                new_ps = sum_wrong_mastered[tier] / total_mastered_tier[tier]
+            else:
+                new_ps = p_slip.get(tier, 0.1)
+                
+            # Constraints
+            new_pg = _clamp(new_pg, *BOUNDS['p_guess'])
+            new_ps = _clamp(new_ps, *BOUNDS['p_slip'])
+            
+            # Sanity
+            if new_pg + new_ps > 0.9:
+                new_pg = min(new_pg, 0.45)
+                new_ps = min(new_ps, 0.20)
+                
+            new_p_guess[tier] = new_pg
+            new_p_slip[tier] = new_ps
 
         p_init, p_learn, p_guess, p_slip = new_p_init, new_p_learn, new_p_guess, new_p_slip
 
@@ -318,8 +357,8 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
             return {
                 'p_init': round(p_init, 4),
                 'p_learn': round(p_learn, 4),
-                'p_guess': round(p_guess, 4),
-                'p_slip': round(p_slip, 4),
+                'p_guess': {t: round(pg, 4) for t, pg in p_guess.items()},
+                'p_slip': {t: round(ps, 4) for t, ps in p_slip.items()},
             }, total_ll, iteration + 1
 
         prev_ll = total_ll
@@ -327,8 +366,8 @@ def em_fit(sequences: List[List[bool]], init_params: Optional[Dict] = None,
     return {
         'p_init': round(p_init, 4),
         'p_learn': round(p_learn, 4),
-        'p_guess': round(p_guess, 4),
-        'p_slip': round(p_slip, 4),
+        'p_guess': {t: round(pg, 4) for t, pg in p_guess.items()},
+        'p_slip': {t: round(ps, 4) for t, ps in p_slip.items()},
     }, prev_ll, max_iter
 
 
@@ -343,19 +382,33 @@ def validate_params(params: Dict, prev_params: Optional[Dict] = None) -> Tuple[b
     warnings = []
 
     # Basic bounds
-    if params['p_guess'] >= params.get('p_slip', 1.0) + 0.35:
-        warnings.append(f"p_guess ({params['p_guess']}) much higher than p_slip ({params['p_slip']})")
+    for tier in [1, 2, 3]:
+        p_guess = params['p_guess'].get(tier, 0.2)
+        p_slip = params['p_slip'].get(tier, 0.1)
+        if p_guess >= p_slip + 0.35:
+            warnings.append(f"Tier {tier}: p_guess ({p_guess}) much higher than p_slip ({p_slip})")
 
     if params['p_learn'] > 0.35:
         warnings.append(f"p_learn ({params['p_learn']}) suspiciously high")
 
     # Drift check against previous version
     if prev_params:
-        for key in ('p_init', 'p_learn', 'p_guess', 'p_slip'):
+        for key in ('p_init', 'p_learn'):
             old = prev_params.get(key, 0)
             new = params.get(key, 0)
             if old > 0 and abs(new - old) / old > 0.30:
                 warnings.append(f"{key} shifted by {abs(new-old)/old*100:.0f}% ({old:.4f} → {new:.4f})")
+                
+        for tier in [1, 2, 3]:
+            old_g = prev_params['p_guess'].get(tier, 0)
+            new_g = params['p_guess'].get(tier, 0)
+            if old_g > 0 and abs(new_g - old_g) / old_g > 0.30:
+                warnings.append(f"Tier {tier} p_guess shifted by {abs(new_g-old_g)/old_g*100:.0f}%")
+                
+            old_s = prev_params['p_slip'].get(tier, 0)
+            new_s = params['p_slip'].get(tier, 0)
+            if old_s > 0 and abs(new_s - old_s) / old_s > 0.30:
+                warnings.append(f"Tier {tier} p_slip shifted by {abs(new_s-old_s)/old_s*100:.0f}%")
 
     is_valid = len([w for w in warnings if 'much higher' in w]) == 0
     return is_valid, warnings
@@ -399,14 +452,14 @@ async def fit_all_concepts(dry_run: bool = False, triggered_by: str = 'cron'):
                     VALUES ($1, $2, 'running', $3)
                 """, run_id, started_at, triggered_by)
 
-            # Get all concepts that have questions
+            # Get all eligible concepts
             concept_tiers = await conn.fetch("""
-                SELECT q.concept_id, q.difficulty_tier, COUNT(*) as attempt_count,
+                SELECT q.concept_id, COUNT(*) as attempt_count,
                        COUNT(DISTINCT uqa.user_id) as student_count
                 FROM user_question_attempts uqa
                 JOIN questions q ON q.id = uqa.question_id
                 WHERE q.concept_id IS NOT NULL
-                GROUP BY q.concept_id, q.difficulty_tier
+                GROUP BY q.concept_id
                 HAVING COUNT(*) >= $1 AND COUNT(DISTINCT uqa.user_id) >= $2
                 ORDER BY COUNT(*) DESC
             """, MIN_SEQUENCES, MIN_STUDENTS)
@@ -421,15 +474,14 @@ async def fit_all_concepts(dry_run: bool = False, triggered_by: str = 'cron'):
 
             for row in concept_tiers:
                 concept_id = row['concept_id']
-                tier = row['difficulty_tier']
                 attempt_count = row['attempt_count']
                 student_count = row['student_count']
 
-                print(f"  Fitting: {concept_id} (tier {tier}) — "
+                print(f"  Fitting: {concept_id} — "
                       f"{attempt_count} attempts, {student_count} students")
 
                 # Build sequences
-                sequences, n_responses, n_students = await build_sequences(conn, concept_id, tier)
+                sequences, n_responses, n_students = await build_sequences(conn, concept_id)
 
                 if not sequences or n_responses < MIN_SEQUENCES:
                     print(f"    ⏭  Skipping (only {n_responses} responses after filtering)")
@@ -438,27 +490,27 @@ async def fit_all_concepts(dry_run: bool = False, triggered_by: str = 'cron'):
 
                 total_sequences += n_responses
 
-                # Get previous params for drift checking
-                prev_row = await conn.fetchrow("""
-                    SELECT p_init, p_learn, p_guess, p_slip, version
+                # Get previous params for drift checking (from active versions per tier)
+                prev_rows = await conn.fetch("""
+                    SELECT difficulty_tier, p_init, p_learn, p_guess, p_slip, version
                     FROM concept_bkt_params
-                    WHERE concept_id = $1 AND difficulty_tier = $2 AND is_active = true
-                    ORDER BY version DESC LIMIT 1
-                """, concept_id, tier)
+                    WHERE concept_id = $1 AND is_active = true
+                """, concept_id)
 
                 prev_params = None
                 prev_version = 0
-                if prev_row:
+                if prev_rows:
+                    # Concept params should be uniform across tiers in the new system
                     prev_params = {
-                        'p_init': float(prev_row['p_init']),
-                        'p_learn': float(prev_row['p_learn']),
-                        'p_guess': float(prev_row['p_guess']),
-                        'p_slip': float(prev_row['p_slip']),
+                        'p_init': float(prev_rows[0]['p_init']),
+                        'p_learn': float(prev_rows[0]['p_learn']),
+                        'p_guess': {r['difficulty_tier']: float(r['p_guess']) for r in prev_rows},
+                        'p_slip': {r['difficulty_tier']: float(r['p_slip']) for r in prev_rows},
                     }
-                    prev_version = prev_row['version']
+                    prev_version = prev_rows[0]['version']
 
-                # Initialize EM from previous fitted params or tier defaults
-                init_params = prev_params or DEFAULT_PARAMS.get(tier, DEFAULT_PARAMS[2])
+                # Initialize EM from previous fitted params or general defaults
+                init_params = prev_params or None
 
                 # Run EM
                 try:
@@ -481,32 +533,29 @@ async def fit_all_concepts(dry_run: bool = False, triggered_by: str = 'cron'):
                 new_version = prev_version + 1
 
                 print(f"    ✅ Fitted in {iterations} iterations (LL={log_lik:.2f})")
-                print(f"       p_init={fitted['p_init']:.4f}  p_learn={fitted['p_learn']:.4f}  "
-                      f"p_guess={fitted['p_guess']:.4f}  p_slip={fitted['p_slip']:.4f}")
-                if prev_params:
-                    print(f"       (was: p_init={prev_params['p_init']:.4f}  "
-                          f"p_learn={prev_params['p_learn']:.4f}  "
-                          f"p_guess={prev_params['p_guess']:.4f}  "
-                          f"p_slip={prev_params['p_slip']:.4f})")
+                print(f"       p_init={fitted['p_init']:.4f}  p_learn={fitted['p_learn']:.4f}")
+                for t in [1, 2, 3]:
+                    print(f"       Tier {t}: p_guess={fitted['p_guess'][t]:.4f}  p_slip={fitted['p_slip'][t]:.4f}")
                 print(f"       version: {prev_version} → {new_version}")
 
                 if not dry_run:
-                    # Deactivate previous version
+                    # Deactivate previous versions
                     await conn.execute("""
                         UPDATE concept_bkt_params
                         SET is_active = false
-                        WHERE concept_id = $1 AND difficulty_tier = $2 AND is_active = true
-                    """, concept_id, tier)
+                        WHERE concept_id = $1 AND is_active = true
+                    """, concept_id)
 
-                    # Insert new version
-                    await conn.execute("""
-                        INSERT INTO concept_bkt_params
-                            (concept_id, difficulty_tier, p_init, p_learn, p_guess, p_slip,
-                             source, version, sample_size, student_count, log_likelihood, is_active)
-                        VALUES ($1, $2, $3, $4, $5, $6, 'em_fitted', $7, $8, $9, $10, true)
-                    """, concept_id, tier,
-                        fitted['p_init'], fitted['p_learn'], fitted['p_guess'], fitted['p_slip'],
-                        new_version, n_responses, n_students, log_lik)
+                    # Insert new version for each tier
+                    for t in [1, 2, 3]:
+                        await conn.execute("""
+                            INSERT INTO concept_bkt_params
+                                (concept_id, difficulty_tier, p_init, p_learn, p_guess, p_slip,
+                                 source, version, sample_size, student_count, log_likelihood, is_active)
+                            VALUES ($1, $2, $3, $4, $5, $6, 'em_fitted', $7, $8, $9, $10, true)
+                        """, concept_id, t,
+                            fitted['p_init'], fitted['p_learn'], fitted['p_guess'][t], fitted['p_slip'][t],
+                            new_version, n_responses, n_students, log_lik)
 
                 concepts_fitted += 1
 
