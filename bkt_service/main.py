@@ -77,6 +77,7 @@ async def reload_learned_params():
                     'source':  r['source'],
                     'version': r['version'],
                     'sample_size': r['sample_size'],
+                    'difficulty_tier': r['difficulty_tier'],
                 }
             learned_params_cache = new_cache
             logger.info(f"Loaded {len(new_cache)} learned param sets from DB")
@@ -92,30 +93,51 @@ def resolve_params(concept_id: Optional[str], tier: int,
       2. Learned params for (concept, tier)
       3. Learned params for (concept, any tier) — average
       4. Hardcoded TIER_PARAMS defaults
+      
+    For a BKT-IRT hybrid approach: 
+      p_init and p_learn are treated as Concept-level (averaged across all tiers)
+      p_guess and p_slip are treated as Item-level (tier-specific)
     """
     tier = tier if tier in TIER_PARAMS else 2
     defaults = TIER_PARAMS[tier]
 
     # Check learned cache
-    learned = None
+    learned_tier_specific = None
+    concept_entries = []
+    
     if concept_id:
-        learned = learned_params_cache.get((concept_id, tier))
-        if not learned:
-            # Try any tier for this concept
-            concept_entries = [v for (c, t), v in learned_params_cache.items() if c == concept_id]
-            if concept_entries:
-                # Average across tiers
-                learned = {
-                    'p_learn': sum(e['p_learn'] for e in concept_entries) / len(concept_entries),
-                    'p_guess': sum(e['p_guess'] for e in concept_entries) / len(concept_entries),
-                    'p_slip':  sum(e['p_slip']  for e in concept_entries) / len(concept_entries),
-                }
+        learned_tier_specific = learned_params_cache.get((concept_id, tier))
+        concept_entries = [v for (c, t), v in learned_params_cache.items() if c == concept_id]
+
+    # Calculate concept-level averages for p_init and p_learn
+    concept_p_init = None
+    concept_p_learn = None
+    if concept_entries:
+        # p_init is the prior baseline mastery. We only use Tier 1's learned p_init as the true baseline.
+        # em_fitter already sets identical p_learn across tiers, so any entry's p_learn is fine.
+        tier_1_entry = next((e for e in concept_entries if e.get('difficulty_tier') == 1), None)
+        
+        if tier_1_entry:
+            concept_p_init = tier_1_entry.get('p_init', DEFAULT_P_INIT)
+        else:
+            concept_p_init = concept_entries[0].get('p_init', DEFAULT_P_INIT)
+            
+        concept_p_learn = concept_entries[0].get('p_learn', DEFAULT_P_LEARN)
+
+    # Resolve p_init and p_learn (Concept Level)
+    res_p_init = concept_p_init if concept_p_init is not None else DEFAULT_P_INIT
+    res_p_learn = override_learn if override_learn is not None else (concept_p_learn if concept_p_learn is not None else defaults['p_learn'])
+
+    # Resolve p_guess and p_slip (Tier Level)
+    res_p_guess = override_guess if override_guess is not None else (learned_tier_specific['p_guess'] if learned_tier_specific else defaults['p_guess'])
+    res_p_slip = override_slip if override_slip is not None else (learned_tier_specific['p_slip'] if learned_tier_specific else defaults['p_slip'])
 
     return {
-        'p_learn': override_learn if override_learn is not None else (learned or defaults).get('p_learn', defaults['p_learn']),
-        'p_guess': override_guess if override_guess is not None else (learned or defaults).get('p_guess', defaults['p_guess']),
-        'p_slip':  override_slip  if override_slip  is not None else (learned or defaults).get('p_slip',  defaults['p_slip']),
-        'source':  'learned' if learned else 'default',
+        'p_init': res_p_init,
+        'p_learn': res_p_learn,
+        'p_guess': res_p_guess,
+        'p_slip':  res_p_slip,
+        'source':  'learned' if concept_entries else 'default',
     }
 
 
@@ -136,7 +158,7 @@ class UpdateRequest(BaseModel):
     userId: str
     skillId: str
     correct: bool
-    p_mastery: float = DEFAULT_P_INIT
+    p_mastery: Optional[float] = None
     difficulty_tier: Optional[int] = 2
     time_taken_seconds: Optional[float] = None
     p_learn: Optional[float] = None
@@ -154,7 +176,7 @@ class UpdateResponse(BaseModel):
 class NextRequest(BaseModel):
     userId: str
     skillId: str
-    p_mastery: float = DEFAULT_P_INIT  # caller passes current mastery from DB
+    p_mastery: Optional[float] = None
 
 class NextResponse(BaseModel):
     userId: str
@@ -200,19 +222,19 @@ def _decay_mastery(mastery: float, last_updated) -> float:
 
 
 def _time_multiplier(time_taken: Optional[float], tier: int, correct: bool) -> float:
-    """Returns a learning boost (>1) for fast correct answers, slight penalty for very slow wrong ones."""
+    """Returns a learning boost (>=1) for fast correct answers. No penalty for slow/wrong."""
     if time_taken is None:
         return 1.0
     expected = TIER_EXPECTED_TIME.get(tier, 120)
     ratio = time_taken / expected
     if correct:
-        # Fast correct answer on hard question = strong signal
+        # Fast correct answer = stronger signal
         if ratio < 0.5: return 1.3
         if ratio < 1.0: return 1.1
         return 1.0
     else:
-        # Very slow wrong answer = weaker negative signal (they were thinking)
-        if ratio > 2.0: return 0.85
+        # We no longer penalize p_learn if they get it wrong slowly
+        # Standard BKT handles the penalty via the negative Bayesian emission update
         return 1.0
 
 
@@ -220,11 +242,16 @@ def _time_multiplier(time_taken: Optional[float], tier: int, correct: bool) -> f
 def update_knowledge(req: UpdateRequest):
     tier = req.difficulty_tier if req.difficulty_tier in TIER_PARAMS else 2
     resolved = resolve_params(req.skillId, tier, req.p_learn, req.p_guess, req.p_slip)
+    
+    p_init  = resolved['p_init']
     p_learn = resolved['p_learn']
     p_guess = resolved['p_guess']
     p_slip  = resolved['p_slip']
 
-    p_post = _bayes_update(req.p_mastery, req.correct, p_guess, p_slip)
+    # Use learned p_init if p_mastery is not provided
+    current_mastery = req.p_mastery if req.p_mastery is not None else p_init
+
+    p_post = _bayes_update(current_mastery, req.correct, p_guess, p_slip)
     t_mult = _time_multiplier(req.time_taken_seconds, tier, req.correct)
     p_next = _apply_learning(p_post, p_learn * t_mult)
     p_next = min(p_next, 0.99)
@@ -238,11 +265,15 @@ def update_knowledge(req: UpdateRequest):
 
 @app.post("/next", response_model=NextResponse)
 def next_question(req: NextRequest):
+    tier = 2 # default to medium for resolving p_init
+    resolved = resolve_params(req.skillId, tier)
+    current_mastery = req.p_mastery if req.p_mastery is not None else resolved['p_init']
+    
     return NextResponse(
         userId=req.userId,
         skillId=req.skillId,
-        mastery=float(req.p_mastery),
-        recommendedDifficulty=_difficulty_from_mastery(req.p_mastery),
+        mastery=float(current_mastery),
+        recommendedDifficulty=_difficulty_from_mastery(current_mastery),
     )
 
 
@@ -334,22 +365,34 @@ async def next_concept(req: NextConceptRequest):
             await conn.close()
 
 
-@app.post("/update-concept")
+@app.post("/update-concept", response_model=UpdateResponse)
 async def update_concept_mastery(req: UpdateRequest):
-    """Update mastery in user_concept_mastery table and return posterior."""
+    """Update mastery in user_concept_mastery table (securely via DB) and return posterior."""
     tier = req.difficulty_tier if req.difficulty_tier in TIER_PARAMS else 2
     resolved = resolve_params(req.skillId, tier, req.p_learn, req.p_guess, req.p_slip)
+    
+    p_init  = resolved['p_init']
     p_learn = resolved['p_learn']
     p_guess = resolved['p_guess']
     p_slip  = resolved['p_slip']
     param_source = resolved['source']
 
-    p_post = _bayes_update(req.p_mastery, req.correct, p_guess, p_slip)
-    t_mult = _time_multiplier(req.time_taken_seconds, tier, req.correct)
-    p_next = min(_apply_learning(p_post, p_learn * t_mult), 0.99)
-
     conn = await get_db()
     try:
+        # Fetch actual historical state from DB
+        row = await conn.fetchrow(
+            "SELECT mastery, last_updated FROM user_concept_mastery WHERE user_id=$1 AND concept_id=$2",
+            int(req.userId), req.skillId
+        )
+
+        if row:
+            current_mastery = _decay_mastery(float(row['mastery']), row['last_updated'])
+        else:
+            current_mastery = p_init
+
+        p_post = _bayes_update(current_mastery, req.correct, p_guess, p_slip)
+        t_mult = _time_multiplier(req.time_taken_seconds, tier, req.correct)
+        p_next = min(_apply_learning(p_post, p_learn * t_mult), 0.99)
         await conn.execute("""
             INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
             VALUES ($1, $2, $3, 1, $4, NOW())
