@@ -10,9 +10,9 @@ import FormData from 'form-data';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import passport from 'passport';
-import {Strategy} from 'passport-local';
+import { Strategy } from 'passport-local';
 import rateLimit from 'express-rate-limit';
-import { bktUpdate, bktNext, bktUpdateConcept, bktNextConcept } from './services/bktClient.js';
+import { bktUpdate, bktNext, bktUpdateConcept, bktNextConcept, bktFit, bktFitDry, bktGetParams, bktGetAllParams, bktReloadParams } from './services/bktClient.js';
 import { checkPrerequisiteGaps, getOptimalLearningPath } from './services/prerequisiteService.js';
 import { extractTextFromPDF } from './services/pdfService.js';
 import { parseUploadedFile } from './services/fileParser.js';
@@ -56,11 +56,11 @@ async function geminiGenerate(systemPrompt, userPrompt, model = 'gemini-2.5-flas
 }
 
 const db = new pg.Client({
-  host:  'localhost',        
-  port: 5432,       
-  user: 'postgres',         
-  password:  process.env.db_password,  
-  database: 'Content Storage',     
+    host: 'localhost',
+    port: 5432,
+    user: 'postgres',
+    password: process.env.db_password,
+    database: 'dblearn',
 });
 
 
@@ -76,7 +76,7 @@ async function getUserConceptMastery(userId, conceptId) {
 
 // Enhanced question selection with spaced repetition and error analysis
 async function getQuestionFromDB(conceptId, difficulty, excludeIds = [], userId = null, instituteId = null) {
-    const tierMap = { very_hard: [3], hard: [3,2], medium: [2], easy: [1,2], very_easy: [1] };
+    const tierMap = { very_hard: [3], hard: [3, 2], medium: [2], easy: [1, 2], very_easy: [1] };
     const tiers = tierMap[difficulty] || [2];
 
     // Prioritize questions user got wrong recently (spaced repetition)
@@ -140,7 +140,7 @@ app.set('views', './views');
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 10 * 1024 * 1024 
+        fileSize: 10 * 1024 * 1024
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
@@ -172,7 +172,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-here',
     resave: false,
     saveUninitialized: true,
-    cookie: { 
+    cookie: {
         secure: process.env.NODE_ENV === 'production',
         maxAge: 1000 * 60 * 60 * 24
     }
@@ -183,25 +183,25 @@ app.use(passport.session());
 
 function processMathContent(content) {
     let processedContent = content;
-    
+
     processedContent = processedContent.replace(/\$\$(.*?)\$\$/g, (match, equation) => {
         return `<span class="math-equation">${equation.trim()}</span>`;
     });
-    
+
     processedContent = processedContent.replace(/\\\\(.*?)\\\\/g, (match, equation) => {
         return `<span class="math-equation">${equation.trim()}</span>`;
     });
     processedContent = processedContent.replace(/\/\/(.*?)\/\//g, (match, equation) => {
         return `<span class="math-equation">${equation.trim()}</span>`;
     });
-    
+
     processedContent = processedContent.replace(/\\\((.*?)\\\)/g, (match, equation) => {
         return `<span class="math-equation">${equation.trim()}</span>`;
     });
     processedContent = processedContent.replace(/\\\[(.*?)\\\]/g, (match, equation) => {
         return `<span class="math-equation">${equation.trim()}</span>`;
     });
-    
+
     return processedContent;
 }
 
@@ -272,7 +272,7 @@ Requirements:
     // If answer provided as text, map to matching option
     if (!/^option[1-4]$/.test(normalized.answer)) {
         const ansText = normalized.answer.toLowerCase();
-        const matchIndex = [1,2,3,4].find(i => normalized[`option${i}`].toLowerCase() === ansText);
+        const matchIndex = [1, 2, 3, 4].find(i => normalized[`option${i}`].toLowerCase() === ansText);
         if (matchIndex) normalized.answer = `option${matchIndex}`;
     }
     // Final sanity
@@ -317,7 +317,7 @@ function ensureInstituteUser(req, res, next) {
 
 // Handle favicon requests to prevent 404 errors
 app.get("/favicon.ico", (req, res) => {
-    res.status(204).end(); 
+    res.status(204).end();
 });
 
 app.get("/", ensureAuthenticated, async (req, res) => {
@@ -363,16 +363,16 @@ app.post("/signup", async (req, res) => {
         const name = req.body.fullName;
         const email = req.body.email;
         const password = req.body.password;
-        
+
         const result = await db.query("SELECT * FROM users WHERE email=$1", [email]);
         if (result.rowCount > 0) {
             return res.send("Email already exists, try logging in");
         }
-        
+
         const hash = await bcrypt.hash(password, saltRounds);
         const userresult = await db.query("INSERT INTO users (email,password,name) VALUES ($1,$2,$3) RETURNING *", [email, hash, name]);
         const user = userresult.rows[0];
-        
+
         req.login(user, (err) => {
             if (err) {
                 console.log(err);
@@ -388,17 +388,17 @@ app.post("/signup", async (req, res) => {
 
 app.post("/login", (req, res, next) => {
     const selectedRole = req.body.role || 'student'; // from hidden field
-    
+
     passport.authenticate("local", (err, user, info) => {
         if (err) {
             console.error("Authentication error:", err);
             return next(err);
         }
-        
+
         if (!user) {
             return res.redirect("/login?error=invalid");
         }
-        
+
         // Validate role matches what user selected
         const userRole = user.role || 'student';
         if (selectedRole === 'admin' && userRole !== 'institute_admin') {
@@ -410,7 +410,7 @@ app.post("/login", (req, res, next) => {
         if (selectedRole === 'student' && userRole !== 'student') {
             return res.redirect("/login?error=invalid");
         }
-        
+
         req.logIn(user, (loginErr) => {
             if (loginErr) {
                 console.error("Login error:", loginErr);
@@ -1168,30 +1168,30 @@ app.get("/institute/dashboard/teacher/gaps/:userId/:conceptId", ensureAuthentica
 passport.use(new Strategy({
     usernameField: 'email',
     passwordField: 'password'
-}, async function(email, password, done) {
+}, async function (email, password, done) {
     try {
         console.log("=== PASSPORT STRATEGY ===");
         console.log("Attempting auth for:", email);
-        
+
         if (!email || !password) {
             console.log("❌ Missing email or password");
             return done(null, false, { message: 'Email and password required' });
         }
-        
+
         const result = await db.query("SELECT * FROM users WHERE email = $1", [email]);
         console.log("Database query returned:", result.rowCount, "rows");
-        
+
         if (result.rowCount === 0) {
             console.log("❌ No user found with email:", email);
             return done(null, false, { message: 'Invalid credentials' });
         }
-        
+
         const user = result.rows[0];
         console.log("✅ User found - ID:", user.id);
-        
+
         const isMatch = await bcrypt.compare(password, user.password);
         console.log("Password comparison result:", isMatch);
-        
+
         if (isMatch) {
             console.log("✅ Password matches - authentication successful");
             return done(null, user);
@@ -1199,7 +1199,7 @@ passport.use(new Strategy({
             console.log("❌ Password does not match");
             return done(null, false, { message: 'Invalid credentials' });
         }
-        
+
     } catch (error) {
         console.error("❌ Strategy error:", error);
         return done(error);
@@ -1216,8 +1216,8 @@ passport.deserializeUser((user, cb) => {
 });
 
 const generateLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
-const chatLimiter    = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
-const expandLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false });
+const chatLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+const expandLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false });
 
 // Main generation route
 app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('document'), async (req, res) => {
@@ -1228,16 +1228,16 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
     const url = req.body.url;
     req.session.topic = topic;
     req.session.level = level;
-    
+
     if (!level || !type) {
         return res.status(400).send("Please fill in all required fields");
     }
-    
+
     if (method === "topic") {
         if (!topic) {
             return res.status(400).send("Please enter a topic");
         }
-        
+
         if (type === "quicknotes") {
             try {
                 const noteContent = await geminiGenerate(
@@ -1246,7 +1246,7 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                 );
                 req.session.content = noteContent;
                 res.render("quicknotes.ejs", { topic, gradeLevel: level, content: noteContent });
-                
+
             } catch (error) {
                 console.error("Quick notes error:", error.message);
                 res.status(500).send("Failed to generate notes. Please try again.");
@@ -1260,11 +1260,11 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                 );
                 const fcClean = fcRaw.replace(/```json\n?|```/g, '').trim();
                 const flashcards = JSON.parse(fcClean);
-                
+
                 req.session.flashcards = flashcards;
                 req.session.topic = topic;
                 req.session.gradeLevel = level;
-                
+
                 res.render("flashcards.ejs", {
                     topic: topic,
                     gradeLevel: level,
@@ -1272,12 +1272,12 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     currentIndex: 0,
                     showAnswer: false
                 });
-                
+
             } catch (error) {
                 console.error("Flashcards error:", error.message);
                 res.status(500).send("Failed to generate flashcards. Please try again.");
             }
-        } 
+        }
         else {
             try {
                 const quizRaw = await geminiGenerate(
@@ -1304,21 +1304,21 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     bktMastery: bktInfo?.mastery,
                     bktRecommendedDifficulty: bktInfo?.recommendedDifficulty
                 });
-                
+
             } catch (error) {
                 console.error("Quiz error:", error.message);
                 res.status(500).send("Failed to generate quiz. Please try again.");
             }
         }
     }
-    else if(method === "pdf") {
+    else if (method === "pdf") {
         if (!req.file) {
             return res.status(400).send("Please upload a PDF file");
         }
-        
+
         try {
             const extractedText = await extractTextFromPDF(req.file.buffer, req.file.originalname);
-            
+
             if (type === "quicknotes") {
                 const pdfNoteContent = await geminiGenerate(
                     "You are an expert educator specializing in analyzing comprehensive academic course materials. Transform content into well-organized study notes with HTML formatting. ALL mathematical expressions MUST use proper notation enclosed in $$",
@@ -1332,11 +1332,11 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     `Create 10 high-quality flashcards for ${level} level students from this course material:\n\n${extractedText}\n\nReturn only a valid JSON array starting with '[' and ending with ']'.`
                 );
                 const flashcards = JSON.parse(pdfFcRaw.replace(/```json\n?|```/g, '').trim());
-                
+
                 req.session.flashcards = flashcards;
                 req.session.topic = "Course Material";
                 req.session.gradeLevel = level;
-                
+
                 res.render("flashcards.ejs", {
                     topic: "Course Material",
                     gradeLevel: level,
@@ -1371,7 +1371,7 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     bktRecommendedDifficulty: bktInfo?.recommendedDifficulty
                 });
             }
-            
+
         } catch (error) {
             console.error("PDF processing error:", error.message);
             if (error.response?.status === 429) return res.status(429).send("API rate limit reached. Please try again later.");
@@ -1379,12 +1379,11 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
             return res.status(500).send("Failed to process PDF. Please try again.");
         }
     }
-    else if(method==="url")
-    {
+    else if (method === "url") {
         console.log(url);
         const transcript = await YoutubeTranscript.fetchTranscript(url, { lang: 'en' })
         console.log(transcript);
-        let fullText = transcript.map(item=>item.text).join(" ");
+        let fullText = transcript.map(item => item.text).join(" ");
         if (type === "quicknotes") {
             try {
                 const urlNoteContent = await geminiGenerate(
@@ -1393,7 +1392,7 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                 );
                 req.session.content = urlNoteContent;
                 res.render("quicknotes.ejs", { topic: "Youtube Video", gradeLevel: level, content: urlNoteContent });
-                
+
             } catch (error) {
                 console.error("Quick notes error:", error.message);
                 res.status(500).send("Failed to generate notes. Please try again.");
@@ -1406,11 +1405,11 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     `Generate 10 flashcards from this YouTube transcript at ${level} school level. Format as JSON array: [{"question": "...", "answer": "..."}]. Return only valid JSON.\n\n${fullText}`
                 );
                 const flashcards = JSON.parse(urlFcRaw.replace(/```json\n?|```/g, '').trim());
-                
+
                 req.session.flashcards = flashcards;
                 req.session.topic = url;
                 req.session.gradeLevel = level;
-                
+
                 res.render("flashcards.ejs", {
                     topic: "Youtube Video",
                     gradeLevel: level,
@@ -1418,12 +1417,12 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     currentIndex: 0,
                     showAnswer: false
                 });
-                
+
             } catch (error) {
                 console.error("Flashcards error:", error.message);
                 res.status(500).send("Failed to generate flashcards. Please try again.");
             }
-        } 
+        }
         else {
             try {
                 const urlQuizRaw = await geminiGenerate(
@@ -1450,7 +1449,7 @@ app.post("/generate", generateLimiter, ensureAuthenticated, upload.single('docum
                     bktMastery: bktInfo?.mastery,
                     bktRecommendedDifficulty: bktInfo?.recommendedDifficulty
                 });
-                
+
             } catch (error) {
                 console.error("Quiz error:", error.message);
                 res.status(500).send("Failed to generate quiz. Please try again.");
@@ -1464,10 +1463,10 @@ app.post("/flashcard", ensureAuthenticated, (req, res) => {
     if (!req.session.flashcards) {
         return res.redirect('/');
     }
-    
+
     const currentIndex = parseInt(req.body.currentIndex);
     const showAnswer = req.body.showAnswer === "true";
-    
+
     res.render("flashcards.ejs", {
         topic: req.session.topic,
         gradeLevel: req.session.gradeLevel,
@@ -1482,10 +1481,10 @@ app.post("/quiz", ensureAuthenticated, async (req, res) => {
     var showResults = true;
     var userAnswers = [];
     var score = 0;
-    
-    for(let i = 0; i < 10; i++) {
+
+    for (let i = 0; i < 10; i++) {
         userAnswers.push(req.body[`answer_${i}`]);
-        if(req.body[`answer_${i}`] === req.session.content[i].answer) {
+        if (req.body[`answer_${i}`] === req.session.content[i].answer) {
             score++;
         }
     }
@@ -1533,11 +1532,11 @@ Current Mastery Level: ${bktInfoAfter ? (bktInfoAfter.mastery * 100).toFixed(1) 
 
 Questions and Answers:
 ${JSON.stringify({
-    questions: req.session.content,
-    userAnswers: userAnswers,
-    score: score,
-    total: req.session.content.length
-}, null, 2)}
+        questions: req.session.content,
+        userAnswers: userAnswers,
+        score: score,
+        total: req.session.content.length
+    }, null, 2)}
 
 Provide a comprehensive analysis with:
 1. Overall Performance Summary
@@ -1563,14 +1562,14 @@ IMPORTANT: Format your response in proper HTML with:
         'gemini-2.5-pro'
     );
     const processedAnalysis = processMathContent(analysisText);
-    
-    res.render("quiz.ejs",{
-        topic:req.session.topic,
-        gradeLevel:req.session.gradeLevel,
-        content:req.session.content,
-        showResults:showResults,
-        userAnswers:userAnswers,
-        score:score,
+
+    res.render("quiz.ejs", {
+        topic: req.session.topic,
+        gradeLevel: req.session.gradeLevel,
+        content: req.session.content,
+        showResults: showResults,
+        userAnswers: userAnswers,
+        score: score,
         performanceAnalysis: processedAnalysis,
         bktMastery: bktInfoAfter?.mastery,
         bktRecommendedDifficulty: bktInfoAfter?.recommendedDifficulty
@@ -1581,11 +1580,11 @@ IMPORTANT: Format your response in proper HTML with:
 app.post('/api/expand-text', ensureAuthenticated, expandLimiter, async (req, res) => {
     try {
         const { text, type, prompt, topic, gradeLevel, customQuestion } = req.body;
-        
+
         const isCustomQuestion = type === 'custom' && customQuestion;
-        
+
         let finalPrompt;
-        
+
         if (isCustomQuestion) {
             finalPrompt = `Context: "${text}" from ${topic} study notes for ${gradeLevel} students.
 
@@ -1627,7 +1626,7 @@ Please provide a comprehensive response that:
 
 Text to expand: "${text}"`;
         }
-        
+
         const expansion = await geminiGenerate(
             "You are an expert educator providing detailed explanations for study materials. Use proper LaTeX formatting for mathematical expressions.",
             finalPrompt
@@ -1646,12 +1645,12 @@ app.post("/save-quicknotes", ensureAuthenticated, async (req, res) => {
         const topic = req.body.topic;
         const level = req.body.gradeLevel;
         const content = req.body.content;
-        
+
         await db.query(
             "INSERT INTO quicknotes(topic, grade_level, note_content, user_id) VALUES ($1,$2,$3,$4)",
             [topic, level, content, req.user.id]
         );
-        
+
         res.render('quicknotes.ejs', {
             topic: topic,
             gradeLevel: level,
@@ -1668,23 +1667,23 @@ app.post("/save-flashcards", ensureAuthenticated, async (req, res) => {
     try {
         const topic = req.body.topic;
         const gradeLevel = req.body.gradeLevel;
-        
+
         await db.query(`
             INSERT INTO flashcards(topic, grade_level, card_content, user_id) 
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (topic, grade_level, user_id) 
             DO UPDATE SET card_content = $3
         `, [topic, gradeLevel, req.body.content, req.user.id]);
-        
+
         res.render("flashcards.ejs", {
             topic: topic,
             gradeLevel: gradeLevel,
             content: JSON.parse(req.body.content),
             showAnswer: req.body.showAnswer === 'true',
-            currentIndex: parseInt(req.body.index) || 0, 
+            currentIndex: parseInt(req.body.index) || 0,
             savedMessage: "Flashcards saved successfully!"
         });
-        
+
     } catch (error) {
         console.error('Error saving flashcards:', error);
         res.render("flashcards.ejs", {
@@ -1704,9 +1703,9 @@ app.post("/save-quiz", ensureAuthenticated, async (req, res) => {
         const topic = req.body.topic;
         const gradeLevel = req.body.gradeLevel;
         const content = req.body.content;
-        
+
         await db.query("INSERT INTO quiz(topic,grade_level,content,user_id) VALUES ($1,$2,$3,$4)", [topic, gradeLevel, content, req.user.id]);
-        
+
         res.render("quiz.ejs", {
             topic: topic,
             gradeLevel: gradeLevel,
@@ -1816,7 +1815,7 @@ app.get('/export/quicknotes/:id', ensureAuthenticated, async (req, res) => {
             return res.status(404).send('Not found');
         }
         const note = response.rows[0];
-        const fileName = `${note.topic.replace(/[^a-z0-9]+/gi,'_')}.html`;
+        const fileName = `${note.topic.replace(/[^a-z0-9]+/gi, '_')}.html`;
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${note.topic}</title></head><body>${note.note_content}</body></html>`);
@@ -1834,7 +1833,7 @@ app.get('/export/flashcards/:id', ensureAuthenticated, async (req, res) => {
             return res.status(404).send('Not found');
         }
         const set = response.rows[0];
-        const fileName = `${set.topic.replace(/[^a-z0-9]+/gi,'_')}_flashcards.json`;
+        const fileName = `${set.topic.replace(/[^a-z0-9]+/gi, '_')}_flashcards.json`;
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.send(JSON.stringify(set.card_content));
@@ -1852,7 +1851,7 @@ app.get('/export/quiz/:id', ensureAuthenticated, async (req, res) => {
             return res.status(404).send('Not found');
         }
         const quiz = response.rows[0];
-        const fileName = `${quiz.topic.replace(/[^a-z0-9]+/gi,'_')}_quiz.json`;
+        const fileName = `${quiz.topic.replace(/[^a-z0-9]+/gi, '_')}_quiz.json`;
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.send(JSON.stringify(quiz.content));
@@ -1867,11 +1866,11 @@ app.get("/view-quicknote/:id", ensureAuthenticated, async (req, res) => {
     try {
         const id = req.params.id;
         const response = await db.query("SELECT topic,grade_level,note_content FROM quicknotes WHERE id=$1 AND user_id=$2", [id, req.user.id]);
-        
+
         if (response.rows.length === 0) {
             return res.status(404).send('Note not found');
         }
-        
+
         const result = response.rows[0];
         res.render("quicknotes.ejs", {
             topic: result.topic,
@@ -1889,19 +1888,19 @@ app.get("/view-flashcards/:id", ensureAuthenticated, async (req, res) => {
         const id = req.params.id;
         const currentIndex = parseInt(req.query.currentIndex) || 0;
         const showAnswer = req.query.showAnswer === 'true';
-        
+
         const response = await db.query("SELECT topic,grade_level,card_content FROM flashcards WHERE id=$1 AND user_id=$2", [id, req.user.id]);
-        
+
         if (response.rows.length === 0) {
             return res.status(404).send('Flashcard set not found');
         }
-        
+
         const content = response.rows[0];
-        
+
         req.session.flashcards = content.card_content;
         req.session.topic = content.topic;
         req.session.gradeLevel = content.grade_level;
-        
+
         res.render("flashcards.ejs", {
             topic: content.topic,
             gradeLevel: content.grade_level,
@@ -1920,16 +1919,16 @@ app.get("/view-quiz/:id", ensureAuthenticated, async (req, res) => {
     try {
         const id = req.params.id;
         const response = await db.query("SELECT topic,grade_level,content FROM quiz WHERE id=$1 AND user_id=$2", [id, req.user.id]);
-        
+
         if (response.rows.length === 0) {
             return res.status(404).send('Quiz not found');
         }
-        
+
         const result = response.rows[0];
         req.session.topic = result.topic;
         req.session.gradeLevel = result.grade_level;
         req.session.content = result.content;
-        
+
         res.render("quiz.ejs", {
             topic: req.session.topic,
             gradeLevel: req.session.gradeLevel,
@@ -1947,20 +1946,20 @@ app.delete("/delete-content/quicknotes/:id", ensureAuthenticated, async (req, re
     try {
         const id = req.params.id;
         const result = await db.query("DELETE FROM quicknotes WHERE id=$1 AND user_id=$2 RETURNING id", [id, req.user.id]);
-        
+
         if (result.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'Note not found' 
+            return res.status(404).json({
+                success: false,
+                error: 'Note not found'
             });
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting quicknote:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to delete note' 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete note'
         });
     }
 });
@@ -1969,23 +1968,23 @@ app.delete("/delete-content/flashcards/:id", ensureAuthenticated, async (req, re
     try {
         const id = req.params.id;
         const result = await db.query("DELETE FROM flashcards WHERE id=$1 AND user_id=$2 RETURNING id", [id, req.user.id]);
-        
+
         if (result.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'Flashcard set not found' 
+            return res.status(404).json({
+                success: false,
+                error: 'Flashcard set not found'
             });
         }
-        
-        res.json({ 
-            success: true, 
-            message: 'Flashcard set deleted successfully' 
+
+        res.json({
+            success: true,
+            message: 'Flashcard set deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting flashcard:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to delete flashcard set' 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete flashcard set'
         });
     }
 });
@@ -1994,20 +1993,20 @@ app.delete("/delete-content/quiz/:id", ensureAuthenticated, async (req, res) => 
     try {
         const id = req.params.id;
         const result = await db.query("DELETE FROM quiz WHERE id=$1 AND user_id=$2 RETURNING id", [id, req.user.id]);
-        
+
         if (result.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                error: 'Quiz not found' 
+            return res.status(404).json({
+                success: false,
+                error: 'Quiz not found'
             });
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting quiz:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to delete quiz' 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete quiz'
         });
     }
 });
@@ -2045,18 +2044,18 @@ app.post("/api/chat/upload-pdf", ensureAuthenticated, upload.single('document'),
 app.post("/api/translate", async (req, res) => {
     try {
         const { text, targetLanguage, sourceLanguage = 'en' } = req.body;
-        
+
         if (!text) {
             return res.status(400).json({ error: 'Text is required' });
         }
-        
+
         if (!targetLanguage) {
             return res.status(400).json({ error: 'Target language is required' });
         }
-        
+
         const { translateText } = await import('./services/translationService.js');
         const translatedText = await translateText(text, targetLanguage, sourceLanguage);
-        
+
         res.json({ translatedText });
     } catch (error) {
         console.error('Translation API error:', error);
@@ -2068,18 +2067,18 @@ app.post("/api/translate", async (req, res) => {
 app.post("/api/translate/batch", async (req, res) => {
     try {
         const { texts, targetLanguage, sourceLanguage = 'en' } = req.body;
-        
+
         if (!texts || !Array.isArray(texts)) {
             return res.status(400).json({ error: 'Texts array is required' });
         }
-        
+
         if (!targetLanguage) {
             return res.status(400).json({ error: 'Target language is required' });
         }
-        
+
         const { translateMultiple } = await import('./services/translationService.js');
         const translatedTexts = await translateMultiple(texts, targetLanguage, sourceLanguage);
-        
+
         res.json({ translatedTexts });
     } catch (error) {
         console.error('Batch translation API error:', error);
@@ -2133,7 +2132,7 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
     try {
         const { conceptId } = req.params;
         const { correct, difficulty_tier, time_taken_seconds, question_id } = req.body;
-        
+
         // Log the attempt
         if (question_id) {
             await db.query(
@@ -2141,7 +2140,7 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
                 [req.user.id, question_id, correct, time_taken_seconds]
             );
         }
-        
+
         const prev = await getUserConceptMastery(req.user.id, conceptId);
         const updated = await bktUpdateConcept({
             userId: req.user.id, skillId: conceptId,
@@ -2152,7 +2151,7 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
         const newMastery = updated.posterior_mastery;
         const newQA = prev.questions_answered + 1;
         const newCA = prev.correct_answers + (correct ? 1 : 0);
-        
+
         await db.query(`
             INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
             VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
@@ -2160,12 +2159,12 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
             SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
             [req.user.id, conceptId, newMastery, newQA, newCA]
         );
-        
+
         // Enhanced stagnation check with prerequisite analysis
         let stagnating = false;
         let prerequisiteGaps = [];
         let suggestedPath = [];
-        
+
         if (newQA >= 5 && newMastery < 0.5) {
             stagnating = true;
             prerequisiteGaps = await checkPrerequisiteGaps(db, req.user.id, conceptId);
@@ -2173,14 +2172,14 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
                 suggestedPath = await getOptimalLearningPath(db, req.user.id, conceptId);
             }
         }
-        
-        res.json({ 
-            mastery: newMastery, 
-            stagnating, 
+
+        res.json({
+            mastery: newMastery,
+            stagnating,
             prerequisiteGaps,
             suggestedPath,
-            message: stagnating ? 
-                `Consider reviewing prerequisites: ${prerequisiteGaps.map(p => p.name).join(', ')}` : 
+            message: stagnating ?
+                `Consider reviewing prerequisites: ${prerequisiteGaps.map(p => p.name).join(', ')}` :
                 null
         });
     } catch (e) {
@@ -2195,7 +2194,7 @@ app.get('/api/adaptive-questions/:conceptId', ensureAuthenticated, async (req, r
         const { conceptId } = req.params;
         const { tier } = req.query;
         const targetTier = parseInt(tier) || 2;
-        
+
         // Fetch questions at the target tier, with fallback to adjacent tiers
         const questionsRes = await db.query(
             `SELECT id, question_text, option1, option2, option3, option4, correct_answer, solution_text, difficulty_tier
@@ -2204,7 +2203,7 @@ app.get('/api/adaptive-questions/:conceptId', ensureAuthenticated, async (req, r
              ORDER BY difficulty_tier ASC, RANDOM() LIMIT 5`,
             [conceptId, targetTier]
         );
-        
+
         res.json({ questions: questionsRes.rows });
     } catch (e) {
         console.error('Adaptive questions error:', e);
@@ -2315,55 +2314,55 @@ app.post('/master/answer', ensureAuthenticated, async (req, res) => {
 app.post('/api/diagnose-concept', ensureAuthenticated, async (req, res) => {
     try {
         const { conceptId } = req.body;
-        
+
         // Set up Server-Sent Events
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive'
         });
-        
+
         function sendEvent(type, data) {
             res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
         }
-        
+
         // Get prerequisite chain for this concept (recursive)
         const visited = new Set();
         const toCheck = [];
-        
+
         async function getPrereqChain(cId) {
             if (visited.has(cId)) return;
             visited.add(cId);
             toCheck.push(cId);
-            
+
             const prereqRes = await db.query(
                 'SELECT prereq_id FROM concept_prerequisites WHERE concept_id = $1',
                 [cId]
             );
-            
+
             for (const row of prereqRes.rows) {
                 await getPrereqChain(row.prereq_id);
             }
         }
-        
+
         await getPrereqChain(conceptId);
-        
+
         let gapsFound = 0;
-        
+
         // Check each concept in the chain
         for (const cId of toCheck) {
             sendEvent('checking', { conceptId: cId });
-            
+
             // Get mastery
             const masteryRes = await db.query(
                 'SELECT mastery FROM user_concept_mastery WHERE user_id = $1 AND concept_id = $2',
                 [req.user.id, cId]
             );
-            
+
             const mastery = masteryRes.rows[0]?.mastery || 0.2;
-            
+
             await new Promise(resolve => setTimeout(resolve, 500)); // Visual delay
-            
+
             if (mastery < 0.7) {
                 gapsFound++;
                 sendEvent('gap', { conceptId: cId, mastery: Math.round(mastery * 100) });
@@ -2371,10 +2370,10 @@ app.post('/api/diagnose-concept', ensureAuthenticated, async (req, res) => {
                 sendEvent('ok', { conceptId: cId, mastery: Math.round(mastery * 100) });
             }
         }
-        
+
         sendEvent('complete', { gapsFound, totalChecked: toCheck.length });
         res.end();
-        
+
     } catch (error) {
         console.error('Concept diagnosis error:', error);
         res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
@@ -2432,16 +2431,16 @@ function filterCircularDependencies(edges) {
         if (!adj[e.prereq_id]) adj[e.prereq_id] = [];
         adj[e.prereq_id].push(e.chapter_id);
     });
-    
+
     // DFS-based cycle detection
     const WHITE = 0, GRAY = 1, BLACK = 2;
     const color = {};
     const cyclicEdges = new Set();
-    
+
     function dfs(node, path) {
         color[node] = GRAY;
         path.push(node);
-        
+
         for (const neighbor of (adj[node] || [])) {
             if (color[neighbor] === GRAY) {
                 // Found a cycle - log it and mark the edge
@@ -2453,19 +2452,19 @@ function filterCircularDependencies(edges) {
                 dfs(neighbor, path);
             }
         }
-        
+
         path.pop();
         color[node] = BLACK;
     }
-    
+
     // Get all unique nodes
     const allNodes = new Set();
     edges.forEach(e => { allNodes.add(e.prereq_id); allNodes.add(e.chapter_id); });
-    
+
     allNodes.forEach(node => {
         if (!color[node]) dfs(node, []);
     });
-    
+
     // Filter out cyclic edges
     return edges.filter(e => !cyclicEdges.has(e.prereq_id + '->' + e.chapter_id));
 }
@@ -2474,34 +2473,34 @@ function filterCircularDependencies(edges) {
 app.get('/api/chapters', ensureAuthenticated, async (req, res) => {
     try {
         const { subject } = req.query;
-        
+
         // Validate subject parameter if provided
         if (subject && typeof subject !== 'string') {
             return res.status(400).json({ error: 'Invalid subject parameter' });
         }
-        
+
         // Query chapters with optional subject filter
         let chaptersQuery = 'SELECT id, name, subject, display_order, description FROM chapters';
         const queryParams = [];
-        
+
         if (subject) {
             chaptersQuery += ' WHERE subject = $1';
             queryParams.push(subject);
         }
-        
+
         chaptersQuery += ' ORDER BY display_order';
-        
+
         const chaptersResult = await db.query(chaptersQuery, queryParams);
-        
+
         // Query all chapter prerequisites
         const prerequisitesResult = await db.query(
             'SELECT chapter_id, prereq_id FROM chapter_prerequisites'
         );
-        
+
         // Detect and exclude circular dependencies
         const prereqEdges = prerequisitesResult.rows;
         const validPrereqs = filterCircularDependencies(prereqEdges);
-        
+
         // Calculate bridge edges: cross-chapter concept dependencies
         let bridgeEdges = [];
         try {
@@ -2526,7 +2525,7 @@ app.get('/api/chapters', ensureAuthenticated, async (req, res) => {
         } catch (bridgeError) {
             console.error('[KnowledgeGraph] Error calculating bridge edges:', bridgeError.message);
         }
-        
+
         res.json({
             chapters: chaptersResult.rows,
             prerequisites: validPrereqs,
@@ -2543,35 +2542,35 @@ app.get('/api/chapters/:chapterId/concepts', ensureAuthenticated, async (req, re
     try {
         const { chapterId } = req.params;
         const { userId } = req.query;
-        
+
         // Validate chapterId - alphanumeric with underscores only
         if (!chapterId || !/^[a-zA-Z0-9_]+$/.test(chapterId)) {
             return res.status(400).json({ error: 'Invalid chapter_id parameter' });
         }
-        
+
         // Validate userId if provided
         if (userId && !/^\d+$/.test(userId)) {
             return res.status(400).json({ error: 'Invalid user_id parameter' });
         }
-        
+
         // Get chapter info
         const chapterResult = await db.query(
             'SELECT id, name FROM chapters WHERE id = $1',
             [chapterId]
         );
-        
+
         if (chapterResult.rows.length === 0) {
             return res.status(404).json({ error: 'Chapter not found' });
         }
-        
+
         // Get concepts in this chapter
         const conceptsResult = await db.query(
             'SELECT id, name, chapter_id FROM concepts WHERE chapter_id = $1',
             [chapterId]
         );
-        
+
         const conceptIds = conceptsResult.rows.map(c => c.id);
-        
+
         // Get prerequisites for these concepts
         let prerequisitesRows = [];
         if (conceptIds.length > 0) {
@@ -2581,7 +2580,7 @@ app.get('/api/chapters/:chapterId/concepts', ensureAuthenticated, async (req, re
             );
             prerequisitesRows = prerequisitesResult.rows;
         }
-        
+
         // Identify ghost nodes (prerequisites from other chapters) with validation
         let ghostNodes = [];
         if (conceptIds.length > 0) {
@@ -2608,7 +2607,7 @@ app.get('/api/chapters/:chapterId/concepts', ensureAuthenticated, async (req, re
                 return true;
             });
         }
-        
+
         res.json({
             chapter: chapterResult.rows[0],
             concepts: conceptsResult.rows,
@@ -2629,11 +2628,11 @@ async function calculateChapterMastery(userId, chapterId) {
             'SELECT id FROM concepts WHERE chapter_id = $1',
             [chapterId]
         );
-        
+
         if (conceptsResult.rows.length === 0) return null;
-        
+
         const conceptIds = conceptsResult.rows.map(c => c.id);
-        
+
         // Query mastery for each concept
         const masteryResult = await db.query(
             `SELECT concept_id, mastery 
@@ -2641,9 +2640,9 @@ async function calculateChapterMastery(userId, chapterId) {
              WHERE user_id = $1 AND concept_id = ANY($2)`,
             [userId, conceptIds]
         );
-        
+
         if (masteryResult.rows.length === 0) return null;
-        
+
         // Calculate weighted average (equal weights)
         const totalMastery = masteryResult.rows.reduce((sum, row) => sum + parseFloat(row.mastery), 0);
         return totalMastery / masteryResult.rows.length;
@@ -2657,20 +2656,20 @@ async function calculateChapterMastery(userId, chapterId) {
 app.get('/api/user/:userId/chapter-mastery', ensureAuthenticated, async (req, res) => {
     try {
         const { userId } = req.params;
-        
+
         // Validate userId - must be numeric
         if (!userId || !/^\d+$/.test(userId)) {
             return res.status(400).json({ error: 'Invalid user_id parameter' });
         }
-        
+
         // Ensure user can only access their own data (or is admin/teacher)
         if (req.user.id !== parseInt(userId) && req.user.role !== 'admin' && req.user.role !== 'teacher') {
             return res.status(403).json({ error: 'Unauthorized' });
         }
-        
+
         // Query all chapters
         const chaptersResult = await db.query('SELECT id FROM chapters ORDER BY display_order');
-        
+
         // Calculate mastery for each chapter
         const chapterMastery = [];
         for (const chapter of chaptersResult.rows) {
@@ -2688,7 +2687,7 @@ app.get('/api/user/:userId/chapter-mastery', ensureAuthenticated, async (req, re
                      WHERE ucm.user_id = $1 AND c.chapter_id = $2 AND ucm.mastery >= 0.8`,
                     [userId, chapter.id]
                 );
-                
+
                 chapterMastery.push({
                     chapter_id: chapter.id,
                     mastery: mastery,
@@ -2697,7 +2696,7 @@ app.get('/api/user/:userId/chapter-mastery', ensureAuthenticated, async (req, re
                 });
             }
         }
-        
+
         res.json({
             userId: parseInt(userId),
             chapterMastery: chapterMastery
@@ -2716,11 +2715,11 @@ async function calculateBatchChapterMastery(batchId) {
             'SELECT user_id FROM batch_students WHERE batch_id = $1',
             [batchId]
         );
-        
+
         if (studentsResult.rows.length === 0) return [];
-        
+
         const studentIds = studentsResult.rows.map(s => s.user_id);
-        
+
         // Aggregate mastery by chapter
         const batchMasteryResult = await db.query(
             `SELECT 
@@ -2736,7 +2735,7 @@ async function calculateBatchChapterMastery(batchId) {
              GROUP BY c.chapter_id`,
             [studentIds]
         );
-        
+
         return batchMasteryResult.rows.map(row => ({
             chapter_id: row.chapter_id,
             avg_mastery: parseFloat(row.avg_mastery),
@@ -2754,25 +2753,25 @@ async function calculateBatchChapterMastery(batchId) {
 app.get('/api/batch/:batchId/chapter-mastery', ensureAuthenticated, async (req, res) => {
     try {
         const { batchId } = req.params;
-        
+
         // Validate batchId - must be numeric
         if (!batchId || !/^\d+$/.test(batchId)) {
             return res.status(400).json({ error: 'Invalid batch_id parameter' });
         }
-        
+
         // Verify user has access to this batch (teacher/admin of the institute)
         if (req.user.role !== 'admin' && req.user.role !== 'teacher' && req.user.role !== 'institute_admin') {
             return res.status(403).json({ error: 'Unauthorized' });
         }
-        
+
         // Get student count
         const studentCountResult = await db.query(
             'SELECT COUNT(*) as count FROM batch_students WHERE batch_id = $1',
             [batchId]
         );
-        
+
         const chapterMastery = await calculateBatchChapterMastery(batchId);
-        
+
         res.json({
             batchId: parseInt(batchId),
             studentCount: parseInt(studentCountResult.rows[0].count),
@@ -2805,7 +2804,7 @@ app.get("/group-study/create", ensureAuthenticated, (req, res) => {
 app.post("/group-study/create", ensureAuthenticated, async (req, res) => {
     try {
         const { name, topic, description, privacy, maxParticipants, studyMaterialType } = req.body;
-        
+
         const room = await createRoom(db, {
             name,
             topic,
@@ -2815,7 +2814,7 @@ app.post("/group-study/create", ensureAuthenticated, async (req, res) => {
             studyMaterialType,
             ownerId: req.user.id
         });
-        
+
         res.redirect(`/group-study/room/${room.room_code}`);
     } catch (error) {
         console.error('Error creating room:', error);
@@ -2830,19 +2829,19 @@ app.get("/group-study/join", ensureAuthenticated, (req, res) => {
 app.post("/group-study/join", ensureAuthenticated, async (req, res) => {
     try {
         const { roomCode } = req.body;
-        
+
         const room = await getRoomByCode(db, roomCode.toUpperCase());
         if (!room) {
             return res.status(404).send("Room not found");
         }
-        
+
         // Check if already a member
         const isMember = await isRoomMember(db, room.id, req.user.id);
         if (!isMember) {
             // Join room
             await joinRoom(db, room.id, req.user.id);
         }
-        
+
         res.redirect(`/group-study/room/${room.room_code}`);
     } catch (error) {
         console.error('Error joining room:', error);
@@ -2853,12 +2852,12 @@ app.post("/group-study/join", ensureAuthenticated, async (req, res) => {
 app.get("/group-study/room/:roomCode", ensureAuthenticated, async (req, res) => {
     try {
         const { roomCode } = req.params;
-        
+
         const room = await getRoomByCode(db, roomCode.toUpperCase());
         if (!room) {
             return res.status(404).send("Room not found");
         }
-        
+
         // Check if user is member
         const isMember = await isRoomMember(db, room.id, req.user.id);
         if (!isMember) {
@@ -2873,14 +2872,14 @@ app.get("/group-study/room/:roomCode", ensureAuthenticated, async (req, res) => 
                 return res.status(403).send("You must be invited to join this room");
             }
         }
-        
+
         const roomWithMembers = await getRoomWithMembers(db, room.id);
         const content = await getRoomContent(db, room.id);
         const sessions = await getRoomSessions(db, room.id);
         const progressStats = await getGroupProgressStats(db, room.id);
         const userRole = await getUserRoomRole(db, room.id, req.user.id);
         const chatMessages = await getRoomChatMessages(db, room.id);
-        
+
         res.render("group-study-room.ejs", {
             user: req.user,
             room: roomWithMembers,
@@ -2900,13 +2899,13 @@ app.post("/group-study/room/:roomId/share", ensureAuthenticated, async (req, res
     try {
         const { roomId } = req.params;
         const { contentType, contentId, title, topic, gradeLevel, contentData } = req.body;
-        
+
         // Check if user is member
         const isMember = await isRoomMember(db, parseInt(roomId), req.user.id);
         if (!isMember) {
             return res.status(403).json({ error: "Not a member of this room" });
         }
-        
+
         const shared = await shareContentToRoom(db, {
             roomId: parseInt(roomId),
             contentType,
@@ -2917,10 +2916,10 @@ app.post("/group-study/room/:roomId/share", ensureAuthenticated, async (req, res
             contentData: typeof contentData === 'string' ? JSON.parse(contentData) : contentData,
             sharedBy: req.user.id
         });
-        
+
         // Emit to room
         io.to(`room_${roomId}`).emit('content_shared', shared);
-        
+
         res.json({ success: true, content: shared });
     } catch (error) {
         console.error('Error sharing content:', error);
@@ -2931,7 +2930,7 @@ app.post("/group-study/room/:roomId/share", ensureAuthenticated, async (req, res
 app.post("/group-study/session/create", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId, title, description, scheduledAt, durationMinutes } = req.body;
-        
+
         const session = await createStudySession(db, {
             roomId: parseInt(roomId),
             title,
@@ -2940,9 +2939,9 @@ app.post("/group-study/session/create", ensureAuthenticated, async (req, res) =>
             durationMinutes: parseInt(durationMinutes) || 60,
             createdBy: req.user.id
         });
-        
+
         io.to(`room_${roomId}`).emit('session_created', session);
-        
+
         res.json({ success: true, session });
     } catch (error) {
         console.error('Error creating session:', error);
@@ -2953,20 +2952,20 @@ app.post("/group-study/session/create", ensureAuthenticated, async (req, res) =>
 app.post("/group-study/quiz/submit", ensureAuthenticated, async (req, res) => {
     try {
         const { roomContentId, score, totalQuestions, timeTakenSeconds, skillId, roomId } = req.body;
-        
+
         // Add to leaderboard
         await addQuizResult(db, parseInt(roomContentId), req.user.id, parseInt(score), parseInt(totalQuestions), parseInt(timeTakenSeconds));
-        
+
         // Update group progress if skillId provided
         if (skillId && roomId) {
             const correctAnswers = parseInt(score);
             await updateGroupProgress(db, parseInt(roomId), skillId, req.user.id, correctAnswers / totalQuestions, parseInt(totalQuestions), correctAnswers);
         }
-        
+
         // Emit leaderboard update
         const leaderboard = await getQuizLeaderboard(db, parseInt(roomContentId));
         io.to(`room_${roomId}`).emit('leaderboard_updated', { roomContentId, leaderboard });
-        
+
         res.json({ success: true, leaderboard });
     } catch (error) {
         console.error('Error submitting quiz:', error);
@@ -2979,11 +2978,11 @@ app.post("/group-study/room/:roomId/invite", ensureAuthenticated, async (req, re
     try {
         const { roomId } = req.params;
         const { email } = req.body;
-        
+
         const result = await inviteUserToRoom(db, parseInt(roomId), req.user.id, email);
-        
+
         io.to(`room_${roomId}`).emit('member_added', { userId: result.userId });
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error inviting user:', error);
@@ -2994,11 +2993,11 @@ app.post("/group-study/room/:roomId/invite", ensureAuthenticated, async (req, re
 app.delete("/group-study/room/:roomId/leave", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId } = req.params;
-        
+
         await leaveRoom(db, parseInt(roomId), req.user.id);
-        
+
         io.to(`room_${roomId}`).emit('member_left', { userId: req.user.id });
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error leaving room:', error);
@@ -3009,11 +3008,11 @@ app.delete("/group-study/room/:roomId/leave", ensureAuthenticated, async (req, r
 app.delete("/group-study/room/:roomId", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId } = req.params;
-        
+
         await deleteRoom(db, parseInt(roomId), req.user.id);
-        
+
         io.to(`room_${roomId}`).emit('room_deleted');
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting room:', error);
@@ -3024,11 +3023,11 @@ app.delete("/group-study/room/:roomId", ensureAuthenticated, async (req, res) =>
 app.delete("/group-study/room/:roomId/member/:userId", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId, userId } = req.params;
-        
+
         await removeUserFromRoom(db, parseInt(roomId), req.user.id, parseInt(userId));
-        
+
         io.to(`room_${roomId}`).emit('member_removed', { userId: parseInt(userId) });
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error removing member:', error);
@@ -3039,11 +3038,11 @@ app.delete("/group-study/room/:roomId/member/:userId", ensureAuthenticated, asyn
 app.post("/group-study/room/:roomId/promote/:userId", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId, userId } = req.params;
-        
+
         await promoteUser(db, parseInt(roomId), req.user.id, parseInt(userId));
-        
+
         io.to(`room_${roomId}`).emit('member_promoted', { userId: parseInt(userId), role: 'admin' });
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error promoting user:', error);
@@ -3055,14 +3054,14 @@ app.post("/group-study/room/:roomId/promote/:userId", ensureAuthenticated, async
 app.get("/group-study/room/:roomId/sessions/active", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId } = req.params;
-        
+
         const activeSession = await getActiveSession(db, parseInt(roomId));
-        
+
         if (activeSession) {
             const participants = await getSessionParticipants(db, activeSession.id);
             activeSession.participants = participants;
         }
-        
+
         res.json({ session: activeSession });
     } catch (error) {
         console.error('Error getting active session:', error);
@@ -3073,11 +3072,11 @@ app.get("/group-study/room/:roomId/sessions/active", ensureAuthenticated, async 
 app.post("/group-study/sessions/:sessionId/start", ensureAuthenticated, async (req, res) => {
     try {
         const { sessionId } = req.params;
-        
+
         const session = await startSession(db, parseInt(sessionId), req.user.id);
-        
+
         io.to(`room_${session.room_id}`).emit('session_started', session);
-        
+
         res.json({ success: true, session });
     } catch (error) {
         console.error('Error starting session:', error);
@@ -3088,11 +3087,11 @@ app.post("/group-study/sessions/:sessionId/start", ensureAuthenticated, async (r
 app.post("/group-study/sessions/:sessionId/end", ensureAuthenticated, async (req, res) => {
     try {
         const { sessionId } = req.params;
-        
+
         const session = await endSession(db, parseInt(sessionId), req.user.id);
-        
+
         io.to(`room_${session.room_id}`).emit('session_ended', session);
-        
+
         res.json({ success: true, session });
     } catch (error) {
         console.error('Error ending session:', error);
@@ -3104,9 +3103,9 @@ app.post("/group-study/sessions/:sessionId/sync", ensureAuthenticated, async (re
     try {
         const { sessionId } = req.params;
         const { position } = req.body;
-        
+
         await updateSessionPosition(db, parseInt(sessionId), req.user.id, position);
-        
+
         // Broadcast sync to room
         const sessionResult = await db.query('SELECT room_id FROM study_sessions WHERE id = $1', [sessionId]);
         if (sessionResult.rows.length > 0) {
@@ -3116,7 +3115,7 @@ app.post("/group-study/sessions/:sessionId/sync", ensureAuthenticated, async (re
                 position
             });
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error syncing position:', error);
@@ -3128,19 +3127,19 @@ app.post("/group-study/sessions/:sessionId/answer", ensureAuthenticated, async (
     try {
         const { sessionId } = req.params;
         const { answer, questionIndex, correct } = req.body;
-        
+
         // Get session info
         const sessionResult = await db.query(
             'SELECT ss.*, rc.room_id FROM study_sessions ss JOIN study_rooms sr ON ss.room_id = sr.id LEFT JOIN room_content rc ON rc.id = ss.content_id WHERE ss.id = $1',
             [sessionId]
         );
-        
+
         if (sessionResult.rows.length === 0) {
             return res.status(404).json({ error: "Session not found" });
         }
-        
+
         const session = sessionResult.rows[0];
-        
+
         // Broadcast answer to room
         io.to(`room_${session.room_id}`).emit('answer_submitted', {
             sessionId: parseInt(sessionId),
@@ -3149,7 +3148,7 @@ app.post("/group-study/sessions/:sessionId/answer", ensureAuthenticated, async (
             answer,
             correct
         });
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error submitting answer:', error);
@@ -3162,7 +3161,7 @@ app.post("/group-study/content/:contentId/annotate", ensureAuthenticated, async 
     try {
         const { contentId } = req.params;
         const { annotationText, positionStart, positionEnd } = req.body;
-        
+
         const annotation = await addAnnotation(db, {
             roomContentId: parseInt(contentId),
             userId: req.user.id,
@@ -3170,13 +3169,13 @@ app.post("/group-study/content/:contentId/annotate", ensureAuthenticated, async 
             positionStart: parseInt(positionStart),
             positionEnd: parseInt(positionEnd)
         });
-        
+
         // Get room ID for broadcasting
         const contentResult = await db.query('SELECT room_id FROM room_content WHERE id = $1', [contentId]);
         if (contentResult.rows.length > 0) {
             io.to(`room_${contentResult.rows[0].room_id}`).emit('annotation_added', annotation);
         }
-        
+
         res.json({ success: true, annotation });
     } catch (error) {
         console.error('Error adding annotation:', error);
@@ -3188,7 +3187,7 @@ app.post("/group-study/content/:contentId/annotate", ensureAuthenticated, async 
 app.get("/group-study/content/:contentId", ensureAuthenticated, async (req, res) => {
     try {
         const { contentId } = req.params;
-        
+
         const contentResult = await db.query(
             `SELECT rc.*, u.name as shared_by_name
              FROM room_content rc
@@ -3196,14 +3195,14 @@ app.get("/group-study/content/:contentId", ensureAuthenticated, async (req, res)
              WHERE rc.id = $1`,
             [contentId]
         );
-        
+
         if (contentResult.rows.length === 0) {
             return res.status(404).json({ error: "Content not found" });
         }
-        
+
         const content = contentResult.rows[0];
         const annotations = await getAnnotations(db, parseInt(contentId));
-        
+
         res.json({ content, annotations });
     } catch (error) {
         console.error('Error getting content:', error);
@@ -3215,16 +3214,16 @@ app.get("/group-study/content/:contentId", ensureAuthenticated, async (req, res)
 app.get("/group-study/room/:roomId/analytics", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId } = req.params;
-        
+
         // Verify user is member
         const isMember = await isRoomMember(db, parseInt(roomId), req.user.id);
         if (!isMember) {
             return res.status(403).json({ error: "Not a member of this room" });
         }
-        
+
         const analytics = await getRoomAnalytics(db, parseInt(roomId));
         const streaks = await getStudyStreaks(db, req.user.id, parseInt(roomId));
-        
+
         res.json({ analytics, streaks });
     } catch (error) {
         console.error('Error getting analytics:', error);
@@ -3235,16 +3234,16 @@ app.get("/group-study/room/:roomId/analytics", ensureAuthenticated, async (req, 
 app.get("/group-study/room/:roomId/analytics/user/:userId", ensureAuthenticated, async (req, res) => {
     try {
         const { roomId, userId } = req.params;
-        
+
         // Verify requester is member
         const isMember = await isRoomMember(db, parseInt(roomId), req.user.id);
         if (!isMember) {
             return res.status(403).json({ error: "Not a member of this room" });
         }
-        
+
         const userAnalytics = await getUserAnalytics(db, parseInt(roomId), parseInt(userId));
         const streaks = await getStudyStreaks(db, parseInt(userId), parseInt(roomId));
-        
+
         res.json({ analytics: userAnalytics, streaks });
     } catch (error) {
         console.error('Error getting user analytics:', error);
@@ -3257,9 +3256,9 @@ app.post("/group-study/sessions/:sessionId/notes", ensureAuthenticated, async (r
     try {
         const { sessionId } = req.params;
         const { notesText } = req.body;
-        
+
         const notes = await saveSessionNotes(db, parseInt(sessionId), req.user.id, notesText);
-        
+
         res.json({ success: true, notes });
     } catch (error) {
         console.error('Error saving session notes:', error);
@@ -3270,9 +3269,9 @@ app.post("/group-study/sessions/:sessionId/notes", ensureAuthenticated, async (r
 app.get("/group-study/sessions/:sessionId/notes", ensureAuthenticated, async (req, res) => {
     try {
         const { sessionId } = req.params;
-        
+
         const notes = await getSessionNotes(db, parseInt(sessionId));
-        
+
         res.json({ notes });
     } catch (error) {
         console.error('Error getting session notes:', error);
@@ -3283,9 +3282,9 @@ app.get("/group-study/sessions/:sessionId/notes", ensureAuthenticated, async (re
 app.get("/group-study/sessions/:sessionId/summary", ensureAuthenticated, async (req, res) => {
     try {
         const { sessionId } = req.params;
-        
+
         const summary = await getSessionSummary(db, parseInt(sessionId));
-        
+
         res.json({ summary });
     } catch (error) {
         console.error('Error getting session summary:', error);
@@ -3311,7 +3310,7 @@ app.get("/group-study/content/:contentId/session", ensureAuthenticated, async (r
     try {
         const { contentId } = req.params;
         const { type } = req.query;
-        
+
         const contentResult = await db.query(
             `SELECT rc.*, sr.id as room_id, sr.name as room_name
              FROM room_content rc
@@ -3319,22 +3318,22 @@ app.get("/group-study/content/:contentId/session", ensureAuthenticated, async (r
              WHERE rc.id = $1`,
             [contentId]
         );
-        
+
         if (contentResult.rows.length === 0) {
             return res.status(404).send("Content not found");
         }
-        
+
         const content = contentResult.rows[0];
-        
+
         // Verify user is member
         const isMember = await isRoomMember(db, content.room_id, req.user.id);
         if (!isMember) {
             return res.status(403).send("Not a member of this room");
         }
-        
+
         // Get active session or create one
         let session = await getActiveSession(db, content.room_id);
-        
+
         if (!session) {
             // Create a new session for this content
             session = await createStudySession(db, {
@@ -3345,13 +3344,13 @@ app.get("/group-study/content/:contentId/session", ensureAuthenticated, async (r
                 durationMinutes: 60,
                 createdBy: req.user.id
             });
-            
+
             // Start it immediately
             session = await startSession(db, session.id, req.user.id);
         }
-        
+
         const participants = await getSessionParticipants(db, session.id);
-        
+
         res.render("group-study-session.ejs", {
             user: req.user,
             content: content,
@@ -3369,9 +3368,9 @@ app.get("/group-study/content/:contentId/session", ensureAuthenticated, async (r
 app.get("/group-study/content/:contentId/annotations", ensureAuthenticated, async (req, res) => {
     try {
         const { contentId } = req.params;
-        
+
         const annotations = await getAnnotations(db, parseInt(contentId));
-        
+
         res.json({ annotations });
     } catch (error) {
         console.error('Error getting annotations:', error);
@@ -3383,7 +3382,7 @@ app.get("/group-study/content/:contentId/annotations", ensureAuthenticated, asyn
 app.get("/group-study/content/:contentId/edit", ensureAuthenticated, async (req, res) => {
     try {
         const { contentId } = req.params;
-        
+
         const contentResult = await db.query(
             `SELECT rc.*, sr.id as room_id, sr.name as room_name
              FROM room_content rc
@@ -3391,26 +3390,26 @@ app.get("/group-study/content/:contentId/edit", ensureAuthenticated, async (req,
              WHERE rc.id = $1`,
             [contentId]
         );
-        
+
         if (contentResult.rows.length === 0) {
             return res.status(404).send("Content not found");
         }
-        
+
         const content = contentResult.rows[0];
-        
+
         // Verify user is member
         const isMember = await isRoomMember(db, content.room_id, req.user.id);
         if (!isMember) {
             return res.status(403).send("Not a member of this room");
         }
-        
+
         // Only quicknotes can be collaboratively edited
         if (content.content_type !== 'quicknotes') {
             return res.status(400).send("Only notes can be collaboratively edited");
         }
-        
+
         const annotations = await getAnnotations(db, parseInt(contentId));
-        
+
         res.render("group-study-editor.ejs", {
             user: req.user,
             content: content,
@@ -3438,7 +3437,7 @@ app.get("/group-study/reminders", ensureAuthenticated, async (req, res) => {
 app.get("/group-study/session/:sessionId", ensureAuthenticated, async (req, res) => {
     try {
         const { sessionId } = req.params;
-        
+
         const sessionResult = await db.query(
             `SELECT ss.*, sr.id as room_id, sr.name as room_name
              FROM study_sessions ss
@@ -3446,27 +3445,27 @@ app.get("/group-study/session/:sessionId", ensureAuthenticated, async (req, res)
              WHERE ss.id = $1`,
             [sessionId]
         );
-        
+
         if (sessionResult.rows.length === 0) {
             return res.status(404).send("Session not found");
         }
-        
+
         const session = sessionResult.rows[0];
-        
+
         // Verify user is member
         const isMember = await isRoomMember(db, session.room_id, req.user.id);
         if (!isMember) {
             return res.status(403).send("Not a member of this room");
         }
-        
+
         // Get associated content if any
         const contentResult = await db.query(
             'SELECT * FROM room_content WHERE room_id = $1 ORDER BY created_at DESC LIMIT 1',
             [session.room_id]
         );
-        
+
         const participants = await getSessionParticipants(db, parseInt(sessionId));
-        
+
         res.render("group-study-session.ejs", {
             user: req.user,
             content: contentResult.rows[0] || null,
@@ -3489,61 +3488,61 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
-    
+
     socket.on('join_room', async (data) => {
         try {
             const { roomId, userId } = data;
-            
+
             // Verify user is member
             const isMember = await isRoomMember(db, parseInt(roomId), parseInt(userId));
             if (!isMember) {
                 socket.emit('error', { message: 'Not a member of this room' });
                 return;
             }
-            
+
             socket.join(`room_${roomId}`);
             await updateUserPresence(db, parseInt(roomId), parseInt(userId));
-            
+
             // Notify others
             const activeMembers = await getActiveMembers(db, parseInt(roomId));
             io.to(`room_${roomId}`).emit('members_updated', activeMembers);
-            
+
             socket.emit('joined_room', { roomId });
         } catch (error) {
             console.error('Error joining room via socket:', error);
             socket.emit('error', { message: 'Error joining room' });
         }
     });
-    
+
     socket.on('leave_room', async (data) => {
         const { roomId, userId } = data;
         socket.leave(`room_${roomId}`);
-        
+
         const activeMembers = await getActiveMembers(db, parseInt(roomId));
         io.to(`room_${roomId}`).emit('members_updated', activeMembers);
     });
-    
+
     socket.on('chat_message', async (data) => {
         try {
             const { roomId, userId, message } = data;
-            
+
             // Verify user is member
             const isMember = await isRoomMember(db, parseInt(roomId), parseInt(userId));
             if (!isMember) {
                 socket.emit('error', { message: 'Not a member of this room' });
                 return;
             }
-            
+
             // Save message
             const savedMessage = await saveChatMessage(db, parseInt(roomId), parseInt(userId), message);
-            
+
             // Get user info
             const userResult = await db.query('SELECT name FROM users WHERE id = $1', [userId]);
             const messageWithUser = {
                 ...savedMessage,
                 user_name: userResult.rows[0]?.name || 'Unknown'
             };
-            
+
             // Broadcast to room
             io.to(`room_${roomId}`).emit('chat_message', messageWithUser);
         } catch (error) {
@@ -3551,36 +3550,36 @@ io.on('connection', (socket) => {
             socket.emit('error', { message: 'Error sending message' });
         }
     });
-    
+
     socket.on('sync_flashcard', (data) => {
         // Broadcast flashcard navigation to room
         const { roomId, currentIndex } = data;
         socket.to(`room_${roomId}`).emit('flashcard_synced', { currentIndex });
     });
-    
+
     socket.on('sync_quiz', (data) => {
         // Broadcast quiz question to room
         const { roomId, questionIndex } = data;
         socket.to(`room_${roomId}`).emit('quiz_synced', { questionIndex });
     });
-    
+
     socket.on('annotation_typing', (data) => {
         // Real-time annotation typing
         const { roomId, roomContentId } = data;
         socket.to(`room_${roomId}`).emit('annotation_typing', data);
     });
-    
+
     // Typing indicators
     socket.on('typing_start', (data) => {
         const { roomId, userId, userName } = data;
         socket.to(`room_${roomId}`).emit('user_typing', { userId, userName });
     });
-    
+
     socket.on('typing_stop', (data) => {
         const { roomId, userId } = data;
         socket.to(`room_${roomId}`).emit('user_stopped_typing', { userId });
     });
-    
+
     // Session synchronization
     socket.on('session_join', async (data) => {
         try {
@@ -3592,12 +3591,12 @@ io.on('connection', (socket) => {
             console.error('Error joining session:', error);
         }
     });
-    
+
     socket.on('session_leave', (data) => {
         const { sessionId } = data;
         socket.leave(`session_${sessionId}`);
     });
-    
+
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
     });
@@ -3659,6 +3658,63 @@ app.get('/admin/payouts', ensureAdmin, async (req, res) => {
         GROUP BY u.name ORDER BY approved_count DESC
     `);
     res.render('admin-payouts.ejs', { payouts: result.rows, rate: 25 });
+});
+
+// ── BKT Admin: EM Parameter Learning ──
+
+// Trigger EM fitting (learns BKT params from student data)
+app.post('/api/bkt/fit', ensureAdmin, async (req, res) => {
+    try {
+        const result = await bktFit('admin');
+        res.json(result);
+    } catch (err) {
+        console.error('BKT fit error:', err.message);
+        res.status(500).json({ error: 'BKT fitting failed', details: err.message });
+    }
+});
+
+// Dry-run EM fitting (no DB writes, just prints results)
+app.post('/api/bkt/fit-dry', ensureAdmin, async (req, res) => {
+    try {
+        const result = await bktFitDry();
+        res.json(result);
+    } catch (err) {
+        console.error('BKT fit-dry error:', err.message);
+        res.status(500).json({ error: 'BKT dry-run failed', details: err.message });
+    }
+});
+
+// Get BKT params for a specific concept
+app.get('/api/bkt/params/:conceptId', ensureAdmin, async (req, res) => {
+    try {
+        const result = await bktGetParams(req.params.conceptId);
+        res.json(result);
+    } catch (err) {
+        console.error('BKT params error:', err.message);
+        res.status(500).json({ error: 'Failed to get BKT params', details: err.message });
+    }
+});
+
+// List all learned BKT params
+app.get('/api/bkt/params', ensureAdmin, async (req, res) => {
+    try {
+        const result = await bktGetAllParams();
+        res.json(result);
+    } catch (err) {
+        console.error('BKT all params error:', err.message);
+        res.status(500).json({ error: 'Failed to get all BKT params', details: err.message });
+    }
+});
+
+// Force reload learned params into BKT cache
+app.post('/api/bkt/reload-params', ensureAdmin, async (req, res) => {
+    try {
+        const result = await bktReloadParams();
+        res.json(result);
+    } catch (err) {
+        console.error('BKT reload error:', err.message);
+        res.status(500).json({ error: 'Failed to reload BKT params', details: err.message });
+    }
 });
 
 // Start the server
