@@ -97,6 +97,25 @@
         .ch-info-footer { padding: 1.25rem; border-top: 1px solid var(--dark-border); }
         .btn-enter-chapter { width: 100%; background: linear-gradient(135deg, var(--royal-purple), var(--royal-blue)); border: none; color: white; padding: 10px; border-radius: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: opacity 0.2s; }
         .btn-enter-chapter:hover { opacity: 0.9; }
+        /* Syllabus toggle button in chapter info panel */
+        .btn-toggle-taught { width: 100%; border: 1px solid var(--dark-border); color: var(--text-secondary); background: var(--dark-bg); padding: 8px; border-radius: 10px; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; margin-bottom: 8px; }
+        .btn-toggle-taught:hover { border-color: var(--royal-purple); color: var(--text-primary); }
+        .btn-toggle-taught.taught { background: rgba(16, 185, 129, 0.15); border-color: #10B981; color: #10B981; }
+        /* Syllabus Progress panel */
+        .syllabus-progress-panel { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem; backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); box-shadow: var(--shadow-sm); }
+        .syllabus-toggle-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .syllabus-toggle-header .section-title { margin-bottom: 0; }
+        .syllabus-body { max-height: 300px; overflow-y: auto; margin-top: 0.75rem; }
+        .syllabus-chapter-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 0.82rem; color: var(--text-primary); }
+        .syllabus-chapter-row:hover { background: rgba(124, 58, 237, 0.08); }
+        .syllabus-mastery-badge { padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 0.75rem; }
+        .delta-warning-card { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 0.8rem; }
+        .delta-warning-card .warn-title { color: #FCA5A5; font-weight: 600; }
+        .delta-warning-card .warn-detail { color: var(--text-muted); font-size: 0.75rem; margin-top: 2px; }
+        /* Report card export button */
+        .btn-report-card { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 0.78rem; transition: color 0.2s; vertical-align: middle; }
+        .btn-report-card:hover { color: var(--royal-gold); }
+        .btn-report-card .spinner-border { width: 12px; height: 12px; border-width: 2px; }
     </style>
 </head>
 <body>
@@ -179,9 +198,34 @@
                 <% heatmapData.students.forEach(function(student) { %>
                     <span class="student-chip" data-student="<%= student.id %>" onclick="selectStudent('<%= student.id %>')">
                         <%= student.name %>
-                    </span>
+                    </span><button class="btn-report-card" title="Export Report Card" onclick="event.stopPropagation(); exportReportCard(this, '<%= student.id %>')"><i class="bi bi-file-earmark-pdf"></i></button>
                 <% }); %>
             </div>
+
+            <% if (selectedBatchId) { %>
+            <!-- Syllabus Progress Panel -->
+            <div class="syllabus-progress-panel animate-in" style="animation-delay:0.07s" id="syllabusProgressPanel">
+                <div class="syllabus-toggle-header" onclick="toggleSyllabusBody()">
+                    <div class="section-title"><i class="bi bi-journal-check me-2"></i>Syllabus Progress</div>
+                    <i class="bi bi-chevron-down" id="syllabusChevron" style="color:var(--text-muted);transition:transform 0.2s;"></i>
+                </div>
+                <div id="syllabusBody" style="display:none;">
+                    <div class="mt-2 mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1" style="font-size:0.82rem;">
+                            <span id="syllabusCountLabel" style="color:var(--text-secondary);">0 / 0 chapters taught</span>
+                            <span id="syllabusCountPct" style="color:var(--text-muted);font-size:0.75rem;">0%</span>
+                        </div>
+                        <div class="progress" style="height:6px;background:var(--dark-bg);border-radius:4px;">
+                            <div class="progress-bar" id="syllabusProgressBar" role="progressbar" style="width:0%;background:var(--royal-purple);border-radius:4px;"></div>
+                        </div>
+                    </div>
+                    <!-- Delta Warnings -->
+                    <div id="deltaWarnings"></div>
+                    <!-- Taught chapters list -->
+                    <div class="syllabus-body" id="taughtChaptersList"></div>
+                </div>
+            </div>
+            <% } %>
 
             <!-- Knowledge Graph -->
             <div class="graph-container animate-in" style="position: relative; animation-delay:0.1s">
@@ -224,6 +268,9 @@
                         </div>
                     </div>
                     <div class="ch-info-footer">
+                        <button class="btn-toggle-taught" id="btnToggleTaught" onclick="toggleChapterTaught()" style="display:none;">
+                            <i class="bi bi-check-circle me-1"></i><span>Mark as Taught</span>
+                        </button>
                         <button class="btn-enter-chapter" id="btnEnterChapter" onclick="enterSelectedChapter()">
                             <i class="bi bi-box-arrow-in-right me-1"></i>Enter Unit
                         </button>
@@ -592,6 +639,8 @@
                 }
 
                 hideGraphLoading();
+                // Apply taught chapter badges
+                applyTaughtBadges();
             } catch (error) {
                 console.error('Failed to render macro graph:', error);
                 hideGraphLoading();
@@ -761,6 +810,9 @@
             selectedChapterId = chapterId;
 
             document.getElementById('chapterInfoPanel').classList.remove('hidden');
+
+            // Update taught toggle button
+            updateTaughtButton(chapterId);
 
             // Zoom into the clicked chapter node
             if (macroNetwork) {
@@ -991,10 +1043,171 @@
             }
         });
 
+        // ===== Syllabus Tracker State =====
+        let taughtChapters = new Set();
+
+        // Fetch teaching status on load
+        async function fetchTeachingStatus() {
+            if (!selectedBatchId) return;
+            try {
+                const res = await fetch('/api/syllabus/status/' + selectedBatchId);
+                if (!res.ok) return;
+                const data = await res.json();
+                taughtChapters = new Set((data.statuses || []).map(s => s.chapter_id));
+            } catch (e) { console.warn('Failed to fetch teaching status:', e); }
+        }
+
+        // Apply taught badges to macro graph nodes
+        function applyTaughtBadges() {
+            if (!macroNetwork) return;
+            const ds = macroNetwork.body.data.nodes;
+            const ids = ds.getIds();
+            const updates = [];
+            ids.forEach(id => {
+                const node = ds.get(id);
+                if (!node) return;
+                const baseLabel = (node.label || '').replace(/ ✓$/, '');
+                const isTaught = taughtChapters.has(id);
+                updates.push({
+                    id: id,
+                    label: isTaught ? baseLabel + ' ✓' : baseLabel,
+                    borderWidth: isTaught ? 4 : 2,
+                    color: Object.assign({}, node.color, {
+                        border: isTaught ? '#10B981' : (node.color?.background || '#6B7280')
+                    })
+                });
+            });
+            ds.update(updates);
+        }
+
+        // Toggle taught status for selected chapter
+        async function toggleChapterTaught() {
+            if (!selectedChapterId || !selectedBatchId) return;
+            const btn = document.getElementById('btnToggleTaught');
+            const isTaught = taughtChapters.has(selectedChapterId);
+            btn.disabled = true;
+            try {
+                if (isTaught) {
+                    const res = await fetch('/api/syllabus/unmark', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chapterId: selectedChapterId, batchId: parseInt(selectedBatchId) })
+                    });
+                    if (res.ok) taughtChapters.delete(selectedChapterId);
+                } else {
+                    const res = await fetch('/api/syllabus/mark', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chapterId: selectedChapterId, batchId: parseInt(selectedBatchId) })
+                    });
+                    if (res.ok || res.status === 409) taughtChapters.add(selectedChapterId);
+                }
+                updateTaughtButton(selectedChapterId);
+                applyTaughtBadges();
+                refreshSyllabusProgress();
+            } catch (e) { console.error('Toggle taught failed:', e); }
+            btn.disabled = false;
+        }
+
+        // Update the taught toggle button state
+        function updateTaughtButton(chapterId) {
+            const btn = document.getElementById('btnToggleTaught');
+            if (!selectedBatchId) { btn.style.display = 'none'; return; }
+            btn.style.display = 'block';
+            const isTaught = taughtChapters.has(chapterId);
+            btn.classList.toggle('taught', isTaught);
+            btn.innerHTML = isTaught
+                ? '<i class="bi bi-check-circle-fill me-1"></i><span>Taught — Click to Unmark</span>'
+                : '<i class="bi bi-check-circle me-1"></i><span>Mark as Taught</span>';
+        }
+
+        // ===== Syllabus Progress Panel =====
+        function toggleSyllabusBody() {
+            const body = document.getElementById('syllabusBody');
+            const chevron = document.getElementById('syllabusChevron');
+            const isHidden = body.style.display === 'none';
+            body.style.display = isHidden ? 'block' : 'none';
+            chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+        }
+
+        function masteryColorClass(m) {
+            if (m >= 0.8) return 'mastery-green';
+            if (m >= 0.5) return 'mastery-yellow';
+            return 'mastery-red';
+        }
+
+        async function refreshSyllabusProgress() {
+            if (!selectedBatchId) return;
+            try {
+                const res = await fetch('/api/syllabus/delta/' + selectedBatchId);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Update progress bar
+                const count = data.taughtCount || 0;
+                const total = data.totalChapters || 0;
+                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                document.getElementById('syllabusCountLabel').textContent = count + ' / ' + total + ' chapters taught';
+                document.getElementById('syllabusCountPct').textContent = pct + '%';
+                document.getElementById('syllabusProgressBar').style.width = pct + '%';
+
+                // Delta warnings (Task 6.3)
+                const warningsEl = document.getElementById('deltaWarnings');
+                const warnings = (data.taughtChapters || []).filter(c => c.is_warning);
+                if (warnings.length > 0) {
+                    warningsEl.innerHTML = warnings.map(w =>
+                        '<div class="delta-warning-card">' +
+                        '<div class="warn-title"><i class="bi bi-exclamation-triangle-fill me-1"></i>' + w.chapter_name + '</div>' +
+                        '<div class="warn-detail">' + Math.round((w.students_below_50 || 0) * 100) + '% of students below 50% mastery · Batch avg: ' + Math.round((w.batch_mastery || 0) * 100) + '%</div>' +
+                        '</div>'
+                    ).join('');
+                } else {
+                    warningsEl.innerHTML = '';
+                }
+
+                // Taught chapters list sorted by ascending mastery
+                const listEl = document.getElementById('taughtChaptersList');
+                const chapters = data.taughtChapters || [];
+                if (chapters.length === 0) {
+                    listEl.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px;text-align:center;">No chapters marked as taught yet</div>';
+                } else {
+                    listEl.innerHTML = chapters.map(c => {
+                        const m = c.batch_mastery || 0;
+                        const colorCls = masteryColorClass(m);
+                        return '<div class="syllabus-chapter-row">' +
+                            '<span>' + c.chapter_name + '</span>' +
+                            '<span class="syllabus-mastery-badge ' + colorCls + '">' + Math.round(m * 100) + '%</span>' +
+                            '</div>';
+                    }).join('');
+                }
+            } catch (e) { console.warn('Failed to refresh syllabus progress:', e); }
+        }
+
+        // ===== Report Card Export (Task 7.1) =====
+        function exportReportCard(btn, studentId) {
+            if (!selectedBatchId) return;
+            const icon = btn.querySelector('i');
+            const origClass = icon.className;
+            icon.className = 'spinner-border spinner-border-sm';
+            btn.disabled = true;
+            const url = '/api/report-card/' + studentId + '?batchId=' + selectedBatchId;
+            window.open(url, '_blank');
+            // Restore button after a short delay (PDF opens in new tab)
+            setTimeout(() => {
+                icon.className = origClass;
+                btn.disabled = false;
+            }, 2000);
+        }
+
         // ===== Initialize =====
         if (heatmapData && heatmapData.concepts && heatmapData.concepts.length >= 0 && selectedBatchId) {
-            // Default to chapters (macro) view
-            switchViewMode('chapters');
+            // Fetch teaching status then render
+            fetchTeachingStatus().then(() => {
+                switchViewMode('chapters');
+                // Apply badges after macro graph renders
+                setTimeout(() => applyTaughtBadges(), 500);
+                refreshSyllabusProgress();
+            });
         }
     </script>
 </body>
