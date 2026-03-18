@@ -324,7 +324,7 @@ This plan extends the existing Learn.ai Node.js/Express monolith with multi-tena
     - **Validates: Requirements 3.6, 10.1, 10.3, 11.3**
 
 - [ ] 14. Institute-scoped question statistics API
-  - [~] 14.1 Implement `GET /api/institute/questions/stats` with `ensureInstituteUser` middleware
+  - [ ] 14.1 Implement `GET /api/institute/questions/stats` with `ensureInstituteUser` middleware
     - Query and return JSON: total questions, count by status (pending/approved/rejected), count by concept, count by difficulty_tier, count uploaded in last 7 days
     - All scoped to `req.user.institute_id`
     - _Requirements: 11.1, 11.2, 11.3_

@@ -281,7 +281,7 @@ async function submitAnswer() {
         const res = await fetch(`/practice/${conceptId}/answer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ correct, questionId: q.id, difficulty_tier: q.difficulty_tier, time_taken_seconds: timeTaken })
+            body: JSON.stringify({ correct, question_id: q.id, difficulty_tier: q.difficulty_tier, time_taken_seconds: timeTaken })
         });
         const data = await res.json();
         if (data.mastery !== undefined) {

@@ -176,19 +176,6 @@
 </nav>
 
 <div class="main">
-    <!-- Today's Mission banner (populated by JS) -->
-    <div id="todaysMission" class="glow-pulse" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,0.06),rgba(124,58,237,0.06));border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:10px 16px;margin:8px 12px 0;flex-shrink:0;cursor:pointer;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 12px rgba(245,158,11,0.08);" onclick="navigateToMission()">
-        <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:1.2rem;">🎯</span>
-            <div style="flex:1;">
-                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--gold);font-weight:600;">Today's Mission</div>
-                <div id="missionConceptName" style="font-size:0.88rem;font-weight:600;color:var(--text);"></div>
-            </div>
-            <span style="font-size:0.75rem;color:var(--muted);" id="missionMastery"></span>
-            <i class="bi bi-arrow-right" style="color:var(--gold);"></i>
-        </div>
-    </div>
-
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
@@ -204,6 +191,7 @@
                 <button class="subject-tab" data-subject="Chemistry">Chem</button>
             </div>
         </div>
+        <!-- Continue Learning banner removed from sidebar, now floating in graph area -->
         <div class="legend">
             <div class="legend-item"><div class="legend-dot" style="background:#22D3EE"></div> Start Here (not attempted)</div>
             <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div> Mastered (≥80%)</div>
@@ -236,6 +224,26 @@
             <button class="ctrl-btn" id="zoomIn" title="Zoom in"><i class="bi bi-plus"></i></button>
             <button class="ctrl-btn" id="zoomOut" title="Zoom out"><i class="bi bi-dash"></i></button>
             <button class="ctrl-btn" id="fitGraph" title="Fit"><i class="bi bi-fullscreen"></i></button>
+        </div>
+        <!-- Floating Continue Learning CTA -->
+        <div id="todaysMission" onclick="navigateToMission()" style="
+            display:none; position:absolute; bottom:16px; left:16px; z-index:10;
+            background:linear-gradient(135deg,rgba(124,58,237,0.85),rgba(59,130,246,0.85));
+            backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+            border:1px solid rgba(255,255,255,0.15); border-radius:14px;
+            padding:10px 16px; cursor:pointer; max-width:280px;
+            box-shadow:0 4px 20px rgba(124,58,237,0.35), 0 0 0 1px rgba(255,255,255,0.05);
+            transition:transform 0.2s ease, box-shadow 0.2s ease;
+        " onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 28px rgba(124,58,237,0.45), 0 0 0 1px rgba(255,255,255,0.1)'" onmouseleave="this.style.transform='';this.style.boxShadow='0 4px 20px rgba(124,58,237,0.35), 0 0 0 1px rgba(255,255,255,0.05)'">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:1rem;">🎯</span>
+                <div style="flex:1;min-width:0;">
+                    <div id="missionLabel" style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.06em;color:rgba(255,255,255,0.7);font-weight:600;line-height:1.2;">Continue Learning</div>
+                    <div id="missionConceptName" style="font-size:0.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                </div>
+                <span style="font-size:0.65rem;color:rgba(255,255,255,0.6);white-space:nowrap;" id="missionMastery"></span>
+                <i class="bi bi-arrow-right" style="color:#fff;font-size:0.8rem;"></i>
+            </div>
         </div>
     </div>
 
@@ -678,17 +686,6 @@ async function renderMacroGraph(subject) {
             div.addEventListener('click', () => showChapterInfo(ch.id));
             list.appendChild(div);
         });
-        
-        // Show overlay for no mastery data
-        if (!hasMasteryData) {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;background:rgba(10,15,30,0.85);padding:1.5rem 2rem;border-radius:12px;border:1px solid #1F2937;z-index:5;pointer-events:none;';
-            overlay.innerHTML = '<i class="bi bi-lightbulb" style="font-size:2rem;color:#F59E0B;display:block;margin-bottom:0.5rem;"></i>' +
-                '<div style="color:#F1F5F9;font-size:0.9rem;font-weight:600;margin-bottom:0.25rem;">No mastery data yet</div>' +
-                '<div style="color:#64748B;font-size:0.8rem;">Start practicing concepts to see your progress here</div>';
-            container.style.position = 'relative';
-            container.appendChild(overlay);
-        }
         
         // Show BKT service warning if applicable
         if (bktWarning) {
@@ -1304,20 +1301,93 @@ document.getElementById('breadcrumbBack').addEventListener('click', (e) => {
 // Init
 switchView('chapters');
 
-// Today's Mission: find highest-priority yellow concept
+// Continue Learning: chapter-aware recommendation using prerequisite topology
 (function initMission() {
-    const concepts = <%- JSON.stringify(typeof concepts !== 'undefined' ? concepts : []) %>;
-    // Find in-progress concepts (mastery 0.01-0.79) sorted by lowest mastery
-    const inProgress = concepts
-        .filter(c => c.mastery > 0 && c.mastery < 0.8 && !c.locked)
-        .sort((a, b) => a.mastery - b.mastery);
-    if (inProgress.length > 0) {
-        const mission = inProgress[0];
-        document.getElementById('missionConceptName').textContent = mission.name;
-        document.getElementById('missionMastery').textContent = Math.round(mission.mastery * 100) + '% mastery';
-        document.getElementById('todaysMission').style.display = 'block';
-        window._missionConceptId = mission.id;
+    const concepts = graphData.concepts;
+    const masteryData = graphData.mastery;
+    const chapters = graphData.chapters || [];
+    const chapterPrereqs = graphData.chapterPrereqs || [];
+    const conceptPrereqs = graphData.prereqs || [];
+    if (!concepts || concepts.length === 0) return;
+
+    // Build mastery lookup (concept-level)
+    const masteryMap = {};
+    masteryData.forEach(m => { masteryMap[m.concept_id] = parseFloat(m.mastery) || 0; });
+
+    // Build chapter prereq lookup: chapter_id -> [prereq_chapter_ids]
+    const chapterPrereqMap = {};
+    chapterPrereqs.forEach(p => {
+        if (!chapterPrereqMap[p.chapter_id]) chapterPrereqMap[p.chapter_id] = [];
+        chapterPrereqMap[p.chapter_id].push(p.prereq_id);
+    });
+
+    // Calculate chapter mastery: average of its concepts' mastery
+    const chapterConceptMap = {}; // chapter_id -> [concept objects]
+    concepts.forEach(c => {
+        if (!c.chapter_id) return;
+        if (!chapterConceptMap[c.chapter_id]) chapterConceptMap[c.chapter_id] = [];
+        chapterConceptMap[c.chapter_id].push(c);
+    });
+
+    const chapterMasteryMap = {}; // chapter_id -> avg mastery
+    Object.keys(chapterConceptMap).forEach(chId => {
+        const chConcepts = chapterConceptMap[chId];
+        const total = chConcepts.reduce((sum, c) => sum + (masteryMap[c.id] || 0), 0);
+        chapterMasteryMap[chId] = total / chConcepts.length;
+    });
+
+    // Chapter is unlocked when ALL prereq chapters have mastery >= 80%
+    const CHAPTER_UNLOCK_THRESHOLD = 0.8;
+    function isChapterUnlocked(chapterId) {
+        const deps = chapterPrereqMap[chapterId] || [];
+        return deps.every(pid => (chapterMasteryMap[pid] || 0) >= CHAPTER_UNLOCK_THRESHOLD);
     }
+
+    // Build concept prereq lookup for within-chapter unlock
+    const conceptPrereqMap = {};
+    conceptPrereqs.forEach(p => {
+        if (!conceptPrereqMap[p.concept_id]) conceptPrereqMap[p.concept_id] = [];
+        conceptPrereqMap[p.concept_id].push(p.prereq_id);
+    });
+
+    // Concept is unlocked if: its chapter is unlocked AND all concept-level prereqs have mastery >= 80%
+    const CONCEPT_UNLOCK_THRESHOLD = 0.8;
+    function isConceptUnlocked(concept) {
+        if (!isChapterUnlocked(concept.chapter_id)) return false;
+        const deps = conceptPrereqMap[concept.id] || [];
+        return deps.every(pid => (masteryMap[pid] || 0) >= CONCEPT_UNLOCK_THRESHOLD);
+    }
+
+    // Build candidates: unlocked concepts with mastery < 80%
+    const candidates = concepts
+        .filter(c => c.chapter_id) // must belong to a chapter
+        .map(c => ({
+            id: c.id,
+            name: c.name,
+            mastery: masteryMap[c.id] || 0,
+            unlocked: isConceptUnlocked(c),
+            hasStarted: masteryMap[c.id] !== undefined && masteryMap[c.id] > 0
+        }))
+        .filter(c => c.unlocked && c.mastery < CONCEPT_UNLOCK_THRESHOLD);
+
+    if (candidates.length === 0) return;
+
+    // Priority: 1) in-progress (started but not mastered), sorted by lowest mastery
+    //           2) not started yet (entry-point concepts in unlocked chapters)
+    const inProgress = candidates.filter(c => c.hasStarted).sort((a, b) => a.mastery - b.mastery);
+    const notStarted = candidates.filter(c => !c.hasStarted);
+
+    const mission = inProgress.length > 0 ? inProgress[0] : notStarted[0];
+    if (!mission) return;
+
+    const label = mission.hasStarted ? 'Continue Learning' : 'Start Learning';
+    const masteryText = mission.hasStarted ? Math.round(mission.mastery * 100) + '% mastery' : 'Not started yet';
+
+    document.getElementById('missionConceptName').textContent = mission.name;
+    document.getElementById('missionMastery').textContent = masteryText;
+    document.getElementById('missionLabel').textContent = label;
+    document.getElementById('todaysMission').style.display = 'block';
+    window._missionConceptId = mission.id;
 })();
 function navigateToMission() {
     if (window._missionConceptId) window.location.href = '/practice/' + window._missionConceptId;

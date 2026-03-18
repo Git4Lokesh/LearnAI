@@ -18,6 +18,7 @@ import { extractTextFromPDF } from './services/pdfService.js';
 import { parseUploadedFile } from './services/fileParser.js';
 import { classifyQuestionConcept } from './services/conceptTagger.js';
 import { ensureBktService } from './services/bktRunner.js';
+import { compileReportData, generateReportPDF, sanitizeFilename } from './services/reportCardService.js';
 import { YoutubeTranscript } from "@danielxceron/youtube-transcript";
 import { Server as SocketIOServer } from 'socket.io';
 import http from 'http';
@@ -60,7 +61,7 @@ const db = new pg.Client({
     port: 5432,
     user: 'postgres',
     password: process.env.db_password,
-    database: 'dblearn',
+    database: 'Content Storage',
 });
 
 
@@ -329,10 +330,12 @@ app.get("/", ensureAuthenticated, async (req, res) => {
         return res.redirect("/institute/dashboard/teacher");
     }
     try {
-        const [conceptsRes, prereqsRes, masteryRes] = await Promise.all([
-            db.query('SELECT id, name, subject FROM concepts ORDER BY subject, name'),
+        const [conceptsRes, prereqsRes, masteryRes, chaptersRes, chapterPrereqsRes] = await Promise.all([
+            db.query('SELECT id, name, subject, chapter_id FROM concepts ORDER BY subject, name'),
             db.query('SELECT concept_id, prereq_id FROM concept_prerequisites'),
-            db.query('SELECT concept_id, mastery, questions_answered, correct_answers FROM user_concept_mastery WHERE user_id=$1', [req.user.id])
+            db.query('SELECT concept_id, mastery, questions_answered, correct_answers FROM user_concept_mastery WHERE user_id=$1', [req.user.id]),
+            db.query('SELECT id, name, subject FROM chapters ORDER BY display_order'),
+            db.query('SELECT chapter_id, prereq_id FROM chapter_prerequisites')
         ]);
         res.render('dashboard.ejs', {
             user: req.user,
@@ -340,12 +343,14 @@ app.get("/", ensureAuthenticated, async (req, res) => {
                 userId: req.user.id,
                 concepts: conceptsRes.rows,
                 prereqs: prereqsRes.rows,
-                mastery: masteryRes.rows
+                mastery: masteryRes.rows,
+                chapters: chaptersRes.rows,
+                chapterPrereqs: chapterPrereqsRes.rows
             }
         });
     } catch (error) {
         console.error('Graph load error:', error);
-        res.render('dashboard.ejs', { user: req.user, graphData: { userId: req.user.id, concepts: [], prereqs: [], mastery: [] } });
+        res.render('dashboard.ejs', { user: req.user, graphData: { userId: req.user.id, concepts: [], prereqs: [], mastery: [], chapters: [], chapterPrereqs: [] } });
     }
 });
 
@@ -3714,6 +3719,243 @@ app.post('/api/bkt/reload-params', ensureAdmin, async (req, res) => {
     } catch (err) {
         console.error('BKT reload error:', err.message);
         res.status(500).json({ error: 'Failed to reload BKT params', details: err.message });
+    }
+});
+
+// ============================================================
+// Syllabus Tracker API Routes
+// ============================================================
+
+// POST /api/syllabus/mark — Mark a chapter as taught for a batch
+app.post('/api/syllabus/mark', ensureInstituteUser, async (req, res) => {
+    try {
+        const { chapterId, batchId } = req.body;
+        if (!chapterId || !batchId) {
+            return res.status(400).json({ error: 'chapterId and batchId are required' });
+        }
+
+        // Validate batch belongs to teacher's institute
+        const batchCheck = await db.query(
+            'SELECT b.id FROM batches b WHERE b.id = $1 AND b.institute_id = $2',
+            [batchId, req.user.institute_id]
+        );
+        if (batchCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO chapter_teaching_status (chapter_id, batch_id, teacher_id)
+             VALUES ($1, $2, $3)
+             RETURNING chapter_id, batch_id, teacher_id, marked_at`,
+            [chapterId, batchId, req.user.id]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'Chapter already marked as taught for this batch' });
+        }
+        console.error('Mark chapter error:', err.message);
+        res.status(500).json({ error: 'Failed to mark chapter', details: err.message });
+    }
+});
+
+// DELETE /api/syllabus/unmark — Unmark a chapter as taught for a batch
+app.delete('/api/syllabus/unmark', ensureInstituteUser, async (req, res) => {
+    try {
+        const { chapterId, batchId } = req.body;
+        if (!chapterId || !batchId) {
+            return res.status(400).json({ error: 'chapterId and batchId are required' });
+        }
+
+        // Validate batch belongs to teacher's institute
+        const batchCheck = await db.query(
+            'SELECT b.id FROM batches b WHERE b.id = $1 AND b.institute_id = $2',
+            [batchId, req.user.institute_id]
+        );
+        if (batchCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const result = await db.query(
+            `DELETE FROM chapter_teaching_status
+             WHERE chapter_id = $1 AND batch_id = $2`,
+            [chapterId, batchId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Teaching status not found' });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Unmark chapter error:', err.message);
+        res.status(500).json({ error: 'Failed to unmark chapter', details: err.message });
+    }
+});
+
+// GET /api/syllabus/status/:batchId — Get all teaching statuses for a batch
+app.get('/api/syllabus/status/:batchId', ensureInstituteUser, async (req, res) => {
+    try {
+        const { batchId } = req.params;
+
+        // Validate batch belongs to teacher's institute
+        const batchCheck = await db.query(
+            'SELECT b.id FROM batches b WHERE b.id = $1 AND b.institute_id = $2',
+            [batchId, req.user.institute_id]
+        );
+        if (batchCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const result = await db.query(
+            `SELECT chapter_id, teacher_id, marked_at
+             FROM chapter_teaching_status
+             WHERE batch_id = $1`,
+            [batchId]
+        );
+
+        res.json({ batchId: parseInt(batchId), statuses: result.rows });
+    } catch (err) {
+        console.error('Get syllabus status error:', err.message);
+        res.status(500).json({ error: 'Failed to get syllabus status', details: err.message });
+    }
+});
+
+// GET /api/syllabus/delta/:batchId — Get taught chapters with batch mastery + warnings
+app.get('/api/syllabus/delta/:batchId', ensureInstituteUser, async (req, res) => {
+    try {
+        const { batchId } = req.params;
+
+        // Validate batch belongs to teacher's institute
+        const batchCheck = await db.query(
+            'SELECT b.id FROM batches b WHERE b.id = $1 AND b.institute_id = $2',
+            [batchId, req.user.institute_id]
+        );
+        if (batchCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // Get total chapter count
+        const totalResult = await db.query('SELECT COUNT(*) AS count FROM chapters');
+        const totalChapters = parseInt(totalResult.rows[0].count);
+
+        // Single aggregated query for taught chapters with batch mastery and warning flags
+        const deltaResult = await db.query(`
+            WITH taught AS (
+                SELECT cts.chapter_id
+                FROM chapter_teaching_status cts
+                WHERE cts.batch_id = $1
+            ),
+            batch_students_list AS (
+                SELECT bs.student_id
+                FROM batch_students bs
+                WHERE bs.batch_id = $1
+            ),
+            chapter_concepts AS (
+                SELECT t.chapter_id, c.id AS concept_id
+                FROM taught t
+                JOIN concepts c ON c.chapter_id = t.chapter_id
+            ),
+            student_concept_mastery AS (
+                SELECT
+                    cc.chapter_id,
+                    bsl.student_id,
+                    cc.concept_id,
+                    COALESCE(ucm.mastery, 0.2) AS mastery
+                FROM chapter_concepts cc
+                CROSS JOIN batch_students_list bsl
+                LEFT JOIN user_concept_mastery ucm
+                    ON ucm.user_id = bsl.student_id
+                    AND ucm.concept_id = cc.concept_id
+            ),
+            student_chapter_mastery AS (
+                SELECT
+                    chapter_id,
+                    student_id,
+                    AVG(mastery) AS student_mastery
+                FROM student_concept_mastery
+                GROUP BY chapter_id, student_id
+            ),
+            chapter_stats AS (
+                SELECT
+                    scm.chapter_id,
+                    AVG(scm.student_mastery) AS batch_mastery,
+                    COUNT(*) FILTER (WHERE scm.student_mastery < 0.5)::float
+                        / NULLIF(COUNT(*), 0) AS students_below_50
+                FROM student_chapter_mastery scm
+                GROUP BY scm.chapter_id
+            )
+            SELECT
+                ch.id AS chapter_id,
+                ch.name AS chapter_name,
+                COALESCE(cs.batch_mastery, 0.2) AS batch_mastery,
+                COALESCE(cs.students_below_50, 1.0) AS students_below_50,
+                CASE WHEN COALESCE(cs.students_below_50, 1.0) >= 0.8 THEN true ELSE false END AS is_warning
+            FROM taught t
+            JOIN chapters ch ON ch.id = t.chapter_id
+            LEFT JOIN chapter_stats cs ON cs.chapter_id = t.chapter_id
+            ORDER BY COALESCE(cs.batch_mastery, 0.2) ASC
+        `, [batchId]);
+
+        res.json({
+            batchId: parseInt(batchId),
+            totalChapters,
+            taughtCount: deltaResult.rows.length,
+            taughtChapters: deltaResult.rows.map(r => ({
+                chapter_id: r.chapter_id,
+                chapter_name: r.chapter_name,
+                batch_mastery: parseFloat(r.batch_mastery),
+                students_below_50: parseFloat(r.students_below_50),
+                is_warning: r.is_warning
+            }))
+        });
+    } catch (err) {
+        console.error('Get syllabus delta error:', err.message);
+        res.status(500).json({ error: 'Failed to get syllabus delta', details: err.message });
+    }
+});
+
+// ============================================================
+// Report Card API Route
+// ============================================================
+
+// GET /api/report-card/:studentId — Generate and stream PDF report card
+app.get('/api/report-card/:studentId', ensureInstituteUser, async (req, res) => {
+    try {
+        const studentId = parseInt(req.params.studentId);
+        if (isNaN(studentId)) {
+            return res.status(400).json({ error: 'Invalid studentId' });
+        }
+
+        // Validate that the student belongs to the same institute as the requesting user
+        const studentCheck = await db.query(
+            'SELECT id, institute_id FROM users WHERE id = $1',
+            [studentId]
+        );
+        if (studentCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        if (studentCheck.rows[0].institute_id !== req.user.institute_id) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const reportData = await compileReportData(db, studentId, req.user.institute_id);
+        const pdfDoc = generateReportPDF(reportData);
+
+        const safeName = sanitizeFilename(reportData.studentName);
+        const dateStr = reportData.generatedAt.toISOString().split('T')[0];
+        const filename = `${safeName}_report_card_${dateStr}.pdf`;
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        pdfDoc.pipe(res);
+    } catch (err) {
+        console.error('Report card generation error:', err.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to generate report card. Please try again.' });
+        }
     }
 });
 
