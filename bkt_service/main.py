@@ -208,7 +208,7 @@ def _difficulty_from_mastery(m: float) -> str:
 
 
 def _decay_mastery(mastery: float, last_updated) -> float:
-    """Exponential decay based on days since last practice. λ=0.05 per day."""
+    """Exponential decay based on days since last practice. λ=0.03 per day."""
     if last_updated is None:
         return mastery
     if isinstance(last_updated, str):
@@ -217,7 +217,7 @@ def _decay_mastery(mastery: float, last_updated) -> float:
     if last_updated.tzinfo is None:
         last_updated = last_updated.replace(tzinfo=timezone.utc)
     days = (now - last_updated).total_seconds() / 86400
-    decayed = mastery * (2.718281828 ** (-0.05 * days))
+    decayed = mastery * (2.718281828 ** (-0.03 * days))
     return max(decayed, 0.1)  # floor at 0.1 so it never hits zero
 
 

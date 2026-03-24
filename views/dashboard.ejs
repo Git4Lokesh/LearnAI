@@ -151,6 +151,65 @@
         .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--muted); }
         .empty-state i { font-size: 3rem; margin-bottom: 1rem; display: block; }
 
+        /* Diagnosis floating panel */
+        .diagnosis-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .diagnosis-backdrop.show { opacity: 1; pointer-events: auto; }
+        .diagnosis-panel {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95);
+            width: 520px; max-width: 92vw; max-height: 80vh;
+            background: rgba(17,24,39,0.88); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px; z-index: 100; display: flex; flex-direction: column;
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+            opacity: 0; pointer-events: none; transition: all 0.3s ease;
+        }
+        .diagnosis-panel.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+        .diag-header {
+            padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .diag-header h4 { font-size: 1rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+        .diag-close { background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 4px; border-radius: 6px; transition: all 0.2s; }
+        .diag-close:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+        .diag-body { padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1; }
+        .diag-target { text-align: center; margin-bottom: 1.25rem; }
+        .diag-target-name { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+        .diag-target-mastery { font-size: 2rem; font-weight: 700; margin-top: 4px; }
+        .diag-section { margin-bottom: 1rem; }
+        .diag-section-title {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--muted); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 6px;
+        }
+        .diag-section-count { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 1px 7px; font-size: 0.65rem; }
+        .diag-node {
+            display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+            border-radius: 10px; margin-bottom: 4px; cursor: pointer; transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .diag-node:hover { background: rgba(124,58,237,0.08); border-color: rgba(124,58,237,0.2); }
+        .diag-node-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .diag-node-name { flex: 1; font-size: 0.82rem; color: var(--text); }
+        .diag-node-mastery { font-size: 0.75rem; font-weight: 600; flex-shrink: 0; }
+        .diag-node-blocks { font-size: 0.65rem; color: var(--muted); flex-shrink: 0; }
+        .diag-path { margin-top: 1rem; }
+        .diag-path-title {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--gold); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 6px;
+        }
+        .diag-path-steps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .diag-path-step {
+            background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.25);
+            border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: var(--text);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .diag-path-step:hover { background: rgba(124,58,237,0.2); border-color: var(--purple); transform: translateY(-1px); }
+        .diag-path-arrow { color: var(--gold); font-size: 0.7rem; }
+        .diag-empty { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; }
+        .diag-empty i { font-size: 2rem; display: block; margin-bottom: 0.5rem; color: var(--green); }
+
         /* Mobile: hide graph, show accordion list */
         @media (max-width: 768px) {
             .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
@@ -258,8 +317,20 @@
                 <div class="mastery-pct" id="infoMastery">—</div>
                 <div class="mastery-label">Mastery</div>
             </div>
+            <div id="sparklineWrap" style="margin-bottom:1.25rem;display:none">
+                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px">Mastery Trend (last 20)</div>
+                <canvas id="sparklineCanvas" width="250" height="48" style="width:100%;height:48px;border-radius:6px;background:rgba(30,41,59,0.4)"></canvas>
+                <div style="display:flex;justify-content:space-between;margin-top:4px">
+                    <span id="sparklineOldest" style="font-size:0.65rem;color:var(--muted)"></span>
+                    <span id="sparklineNewest" style="font-size:0.65rem;color:var(--muted)"></span>
+                </div>
+            </div>
             <div class="stat-row"><span class="stat-label">Questions answered</span><span id="infoQA">—</span></div>
             <div class="stat-row"><span class="stat-label">Correct</span><span id="infoCorrect">—</span></div>
+            <div class="stat-row"><span class="stat-label">Accuracy</span><span id="infoAccuracy">—</span></div>
+            <div class="stat-row"><span class="stat-label">Avg time / question</span><span id="infoAvgTime">—</span></div>
+            <div class="stat-row"><span class="stat-label">Unsolved questions</span><span id="infoUnsolved">—</span></div>
+            <div class="stat-row"><span class="stat-label">Last practiced</span><span id="infoLastPracticed">—</span></div>
             <div class="stat-row"><span class="stat-label">Status</span><span id="infoStatus">—</span></div>
             <div class="prereq-list" id="prereqList"></div>
             <div class="learning-path" id="learningPath" style="display:none">
@@ -298,6 +369,18 @@
                 <i class="bi bi-box-arrow-in-right me-1"></i>Enter Unit
             </button>
         </div>
+    </div>
+</div>
+
+<!-- Diagnosis Floating Panel -->
+<div class="diagnosis-backdrop" id="diagBackdrop" onclick="closeDiagnosis()"></div>
+<div class="diagnosis-panel" id="diagPanel">
+    <div class="diag-header">
+        <h4>🔍 Prerequisite Diagnosis</h4>
+        <button class="diag-close" onclick="closeDiagnosis()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="diag-body" id="diagBody">
+        <div class="diag-empty"><div class="loading-spinner"></div>Analyzing prerequisite chain...</div>
     </div>
 </div>
 
@@ -1162,6 +1245,9 @@ function selectConcept(id) {
 
     document.getElementById('infoPanel').classList.remove('hidden');
 
+    // Load async stats (sparkline, unsolved count, accuracy, etc.)
+    loadConceptStats(id);
+
     // Highlight in sidebar
     document.querySelectorAll('.concept-item').forEach(el => el.classList.remove('selected'));
     const sidebarItem = document.querySelector(`.concept-item[data-id="${id}"]`);
@@ -1177,75 +1263,348 @@ function startPractice() {
 
 let diagnosisRunning = false;
 
+function closeDiagnosis() {
+    document.getElementById('diagBackdrop').classList.remove('show');
+    document.getElementById('diagPanel').classList.remove('show');
+}
+
+function openDiagnosis() {
+    document.getElementById('diagBackdrop').classList.add('show');
+    document.getElementById('diagPanel').classList.add('show');
+}
+
+function diagNodeClick(conceptId) {
+    closeDiagnosis();
+    // Navigate to the concept on the graph
+    if (network && currentView !== 'chapters') {
+        network.selectNodes([conceptId]);
+        network.focus(conceptId, { scale: 1.5, animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+        selectConcept(conceptId);
+    }
+}
+
+function renderDiagnosisNodes(nodes, dotColor, masteryColor) {
+    return nodes.map(n => renderRichNode(n, dotColor, masteryColor)).join('');
+}
+
+function renderRichNode(n, dotColor, masteryColor) {
+    const trend = n.recentTrend != null
+        ? `<span style="font-size:0.6rem;color:${n.recentTrend > 0 ? 'var(--green)' : n.recentTrend < 0 ? 'var(--red)' : 'var(--muted)'}">${n.recentTrend > 0 ? '↑' + n.recentTrend : n.recentTrend < 0 ? '↓' + Math.abs(n.recentTrend) : '→'}</span>`
+        : '';
+    // Signal bars
+    const readinessVal = n.readiness ?? 0;
+    const confVal = n.confidence ?? 0;
+    const recVal = n.recency ?? 0;
+    const accVal = n.accuracy ?? 0;
+    const calVal = n.calibration ?? 50;
+    const rColor = readinessVal >= 80 ? 'var(--green)' : readinessVal >= 50 ? 'var(--gold)' : 'var(--red)';
+
+    function miniBar(val, color, label) {
+        return `<div style="display:flex;align-items:center;gap:4px;min-width:0">
+            <span style="font-size:0.55rem;color:var(--muted);width:28px;text-align:right;flex-shrink:0">${label}</span>
+            <div style="flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;min-width:20px">
+                <div style="width:${val}%;height:100%;background:${color};border-radius:2px"></div>
+            </div>
+            <span style="font-size:0.55rem;color:var(--muted);width:22px;flex-shrink:0">${val}%</span>
+        </div>`;
+    }
+
+    // Context tags
+    const tags = [];
+    if (n.blocksCount > 0) tags.push(`<span style="background:rgba(239,68,68,0.15);color:var(--red);border-radius:4px;padding:1px 5px;font-size:0.55rem">blocks ${n.blocksCount}</span>`);
+    if (n.questionsAnswered === 0) tags.push(`<span style="background:rgba(255,255,255,0.06);color:var(--muted);border-radius:4px;padding:1px 5px;font-size:0.55rem">not attempted</span>`);
+    else tags.push(`<span style="background:rgba(255,255,255,0.06);color:var(--muted);border-radius:4px;padding:1px 5px;font-size:0.55rem">${n.questionsAnswered}q</span>`);
+    if (n.daysSinceLastPractice != null && n.daysSinceLastPractice > 0) tags.push(`<span style="background:rgba(255,255,255,0.06);color:var(--muted);border-radius:4px;padding:1px 5px;font-size:0.55rem">${n.daysSinceLastPractice}d ago</span>`);
+    if (n.hasLearnedParams) tags.push(`<span style="background:rgba(124,58,237,0.15);color:var(--purple-light);border-radius:4px;padding:1px 5px;font-size:0.55rem">EM fitted</span>`);
+    if (n.divergenceType && n.divergenceType !== 'calibrated') tags.push(`<span style="background:rgba(245,158,11,0.15);color:var(--gold);border-radius:4px;padding:1px 5px;font-size:0.55rem">${n.divergenceType === 'underestimated' ? '📈' : '📉'} ${n.divergenceMagnitude}% div</span>`);
+    if (n.depth > 1) tags.push(`<span style="background:rgba(255,255,255,0.06);color:var(--muted);border-radius:4px;padding:1px 5px;font-size:0.55rem">depth ${n.depth}</span>`);
+
+    return `<div class="diag-node" onclick="diagNodeClick('${n.id}')" style="flex-direction:column;align-items:stretch;padding:10px 12px;border:1px solid rgba(255,255,255,0.04)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div class="diag-node-dot" style="background:${dotColor}"></div>
+            <div style="flex:1;font-size:0.82rem;color:var(--text);font-weight:500">${n.name}</div>
+            <div style="font-size:0.85rem;font-weight:700;color:${masteryColor}">${n.mastery}% ${trend}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:4px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+                ${miniBar(readinessVal, rColor, 'RDY')}
+                ${miniBar(confVal, confVal >= 70 ? 'var(--green)' : confVal >= 40 ? 'var(--gold)' : 'var(--red)', 'CNF')}
+                ${miniBar(recVal, recVal >= 70 ? 'var(--green)' : recVal >= 40 ? 'var(--gold)' : 'var(--red)', 'RCN')}
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+                ${miniBar(accVal, accVal >= 70 ? 'var(--green)' : accVal >= 40 ? 'var(--gold)' : 'var(--red)', 'ACC')}
+                ${miniBar(calVal, calVal >= 70 ? 'var(--green)' : calVal >= 40 ? 'var(--gold)' : 'var(--red)', 'CAL')}
+                ${miniBar(n.impactScore ? Math.min(100, Math.round(n.impactScore * 20)) : 0, 'var(--purple-light)', 'IMP')}
+            </div>
+        </div>
+        ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">${tags.join('')}</div>` : ''}
+    </div>`;
+}
+
+function renderReadinessArc(pct) {
+    // SVG arc for the readiness gauge
+    const r = 54, cx = 60, cy = 60, sw = 8;
+    const circumference = 2 * Math.PI * r;
+    const dashLen = (pct / 100) * circumference;
+    const color = pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444';
+    const glow = pct >= 80 ? 'rgba(16,185,129,0.3)' : pct >= 50 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+    return `<svg width="120" height="120" viewBox="0 0 120 120" style="display:block;margin:0 auto">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${sw}" />
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+            stroke-dasharray="${dashLen} ${circumference}" stroke-dashoffset="0"
+            stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"
+            style="filter:drop-shadow(0 0 6px ${glow});transition:stroke-dasharray 0.6s ease" />
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="${color}" font-size="22" font-weight="700">${pct}%</text>
+        <text x="${cx}" y="${cy + 14}" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" letter-spacing="0.08em" text-transform="uppercase">READINESS</text>
+    </svg>`;
+}
+
+function renderSignalLegend() {
+    return `<div style="display:flex;flex-wrap:wrap;gap:6px 12px;padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.04);margin-top:8px">
+        <div style="font-size:0.6rem;color:var(--muted);width:100%;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.06em">5-Signal Analysis</div>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">RDY</b> Readiness (composite)</span>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">CNF</b> Confidence (sample size)</span>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">RCN</b> Recency (time decay)</span>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">ACC</b> Accuracy (correct/total)</span>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">CAL</b> Calibration (BKT vs actual)</span>
+        <span style="font-size:0.6rem;color:var(--muted)"><b style="color:var(--text)">IMP</b> Impact (downstream weight)</span>
+    </div>`;
+}
+
 async function diagnoseConcept() {
     if (!selectedConcept || diagnosisRunning) return;
-    
+
     diagnosisRunning = true;
     const btn = document.getElementById('btnDiagnose');
     btn.disabled = true;
     btn.textContent = '🔍 Diagnosing...';
-    
+
+    document.getElementById('diagBody').innerHTML = '<div class="diag-empty"><div class="loading-spinner"></div>Running multi-signal prerequisite analysis...</div>';
+    openDiagnosis();
+
     try {
         const response = await fetch('/api/diagnose-concept', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ conceptId: selectedConcept })
         });
-        
+
         if (!response.ok) throw new Error('Diagnosis failed');
-        
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.slice(6));
-                        
-                        if (data.type === 'checking') {
-                            // Highlight node being checked
-                            network.selectNodes([data.conceptId]);
-                            network.focus(data.conceptId, { scale: 1.5, animation: { duration: 300 } });
-                        } else if (data.type === 'gap') {
-                            // Mark as gap (red)
-                            const update = { id: data.conceptId, color: { background: '#EF4444', border: '#DC2626' } };
-                            network.setData({ nodes: network.body.data.nodes.update(update), edges: network.body.data.edges });
-                        } else if (data.type === 'ok') {
-                            // Mark as OK (green pulse)
-                            const update = { id: data.conceptId, color: { background: '#10B981', border: '#059669' } };
-                            network.setData({ nodes: network.body.data.nodes.update(update), edges: network.body.data.edges });
-                        } else if (data.type === 'complete') {
-                            // Reset selection
-                            network.unselectAll();
-                            if (data.gapsFound > 0) {
-                                alert(`Diagnosis complete! Found ${data.gapsFound} prerequisite gaps (marked in red).`);
-                            } else {
-                                alert('Great! All prerequisites are mastered.');
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Failed to parse SSE data:', line);
-                    }
-                }
-            }
+        const data = await response.json();
+
+        let html = '';
+
+        // ── Header: Target concept + readiness arc ──
+        const tColor = data.target.mastery >= 80 ? 'var(--green)' : data.target.mastery >= 50 ? 'var(--gold)' : 'var(--red)';
+        html += `<div style="text-align:center;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="font-size:1rem;font-weight:600;color:var(--text);margin-bottom:2px">${data.target.name}</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-bottom:12px">Current mastery: <span style="color:${tColor};font-weight:600">${data.target.mastery}%</span>${data.target.rawMastery !== data.target.mastery ? ` <span style="opacity:0.5">(raw ${data.target.rawMastery}%, decayed)</span>` : ''}</div>
+            ${renderReadinessArc(data.overallReadiness)}
+            <div style="display:flex;justify-content:center;gap:1.5rem;margin-top:10px">
+                <div style="text-align:center">
+                    <div style="font-size:1.1rem;font-weight:700;color:var(--text)">${data.totalPrereqs}</div>
+                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Prerequisites</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.1rem;font-weight:700;color:var(--purple-light)">~${data.estimatedEffort}</div>
+                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Questions to ready</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.1rem;font-weight:700;color:var(--cyan)">${data.learnedParamsAvailable || 0}</div>
+                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">EM-fitted concepts</div>
+                </div>
+            </div>
+        </div>`;
+
+        // ── Summary bar: severity breakdown ──
+        if (data.totalPrereqs > 0) {
+            const s = data.summary;
+            const total = data.totalPrereqs;
+            const segments = [
+                { count: s.rootCauses, color: '#EF4444', label: 'Root cause' },
+                { count: s.critical, color: '#F59E0B', label: 'Critical' },
+                { count: s.stale, color: '#A855F7', label: 'Stale' },
+                { count: s.weak, color: '#22D3EE', label: 'Weak' },
+                { count: s.mastered, color: '#10B981', label: 'Mastered' }
+            ].filter(seg => seg.count > 0);
+            html += `<div style="padding:10px 0">
+                <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;gap:1px">
+                    ${segments.map(seg => `<div style="flex:${seg.count};background:${seg.color};min-width:3px" title="${seg.label}: ${seg.count}"></div>`).join('')}
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;justify-content:center">
+                    ${segments.map(seg => `<span style="font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px"><span style="width:6px;height:6px;border-radius:50%;background:${seg.color};flex-shrink:0"></span>${seg.count} ${seg.label}</span>`).join('')}
+                </div>
+            </div>`;
         }
-        
+
+        // ── No prereqs case ──
+        if (data.totalPrereqs === 0) {
+            html += `<div style="text-align:center;padding:1.5rem 0">
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:1.5rem">✅</div>
+                <div style="font-size:0.9rem;color:var(--text);font-weight:500">No prerequisites</div>
+                <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">This is a foundational concept — dive right in.</div>
+            </div>`;
+            html += renderSignalLegend();
+            document.getElementById('diagBody').innerHTML = html;
+            return;
+        }
+
+        // ── All clear case — still show rich data ──
+        const hasGaps = data.summary.rootCauses + data.summary.critical + data.summary.stale + data.summary.weak;
+        if (hasGaps === 0) {
+            html += `<div style="text-align:center;padding:12px 0 8px">
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:1.5rem">✅</div>
+                <div style="font-size:0.9rem;color:var(--green);font-weight:600">All prerequisites mastered</div>
+                <div style="font-size:0.72rem;color:var(--muted);margin-top:4px">Your foundation is solid. You're ready to tackle this concept.</div>
+            </div>`;
+            // Still show mastered prereqs with their signal data
+            if (data.mastered.length > 0) {
+                html += `<div class="diag-section">
+                    <div class="diag-section-title"><span style="color:var(--green)">✅ Prerequisite Health</span><span class="diag-section-count">${data.mastered.length}</span></div>
+                    ${data.mastered.map(n => renderRichNode(n, 'var(--green)', 'var(--green)')).join('')}
+                </div>`;
+            }
+            // Show divergence insights even in all-clear
+            if (data.divergenceInsights && data.divergenceInsights.length > 0) {
+                html += renderDivergenceSection(data.divergenceInsights);
+            }
+            html += renderSignalLegend();
+            document.getElementById('diagBody').innerHTML = html;
+            return;
+        }
+
+        // ── Gap sections ──
+        if (data.rootCauses.length > 0) {
+            html += `<div class="diag-section">
+                <div class="diag-section-title"><span style="color:var(--red)">⚠ Root Causes — Start Here</span><span class="diag-section-count">${data.rootCauses.length}</span></div>
+                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Deepest unmastered prereqs blocking your progress. Fix these first.</div>
+                ${data.rootCauses.map(n => renderRichNode(n, 'var(--red)', 'var(--red-light)')).join('')}
+            </div>`;
+        }
+
+        if (data.critical.length > 0) {
+            html += `<div class="diag-section">
+                <div class="diag-section-title"><span style="color:var(--gold)">🔶 Critical Gaps</span><span class="diag-section-count">${data.critical.length}</span></div>
+                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Below mastery threshold with high downstream impact.</div>
+                ${data.critical.map(n => renderRichNode(n, 'var(--gold)', 'var(--gold)')).join('')}
+            </div>`;
+        }
+
+        if (data.stale && data.stale.length > 0) {
+            html += `<div class="diag-section">
+                <div class="diag-section-title"><span style="color:var(--purple-light)">⏳ Stale — Needs Review</span><span class="diag-section-count">${data.stale.length}</span></div>
+                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Previously learned but knowledge has decayed over time.</div>
+                ${data.stale.map(n => renderRichNode(n, 'var(--purple-light)', 'var(--purple-light)')).join('')}
+            </div>`;
+        }
+
+        if (data.weak.length > 0) {
+            html += `<div class="diag-section">
+                <div class="diag-section-title"><span style="color:var(--cyan)">📘 Weak — Almost There</span><span class="diag-section-count">${data.weak.length}</span></div>
+                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Close to mastery. A few more practice questions should do it.</div>
+                ${data.weak.map(n => renderRichNode(n, 'var(--cyan)', 'var(--cyan)')).join('')}
+            </div>`;
+        }
+
+        // Mastered — expandable
+        if (data.mastered.length > 0) {
+            html += `<div class="diag-section">
+                <div class="diag-section-title" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.diag-expand-icon').textContent=this.nextElementSibling.style.display==='none'?'▸':'▾'">
+                    <span style="color:var(--green)">✅ Mastered</span><span class="diag-section-count">${data.mastered.length}</span>
+                    <span class="diag-expand-icon" style="margin-left:auto;font-size:0.7rem;color:var(--muted)">▸</span>
+                </div>
+                <div style="display:none">
+                    ${data.mastered.map(n => renderRichNode(n, 'var(--green)', 'var(--green)')).join('')}
+                </div>
+            </div>`;
+        }
+
+        // ── Optimal study path ──
+        if (data.suggestedPath && data.suggestedPath.length > 0) {
+            html += `<div class="diag-path" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;margin-top:4px">
+                <div class="diag-path-title">📍 Optimal Study Path</div>
+                <div style="font-size:0.62rem;color:var(--muted);padding:0 0 8px">Impact-weighted topological order. Follow this sequence for fastest readiness.</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    ${data.suggestedPath.map((s, i) => {
+                        const sColor = s.mastery >= 50 ? 'var(--gold)' : 'var(--red-light)';
+                        return `<div class="diag-node" onclick="diagNodeClick('${s.id}')" style="border:1px solid rgba(124,58,237,0.15);padding:10px 12px">
+                            <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;box-shadow:0 0 8px rgba(124,58,237,0.3)">${i + 1}</div>
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:0.82rem;color:var(--text);font-weight:500">${s.name}</div>
+                                ${s.reason ? `<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;line-height:1.3">${s.reason}</div>` : ''}
+                            </div>
+                            <div style="text-align:right;flex-shrink:0">
+                                <div style="font-size:0.82rem;font-weight:700;color:${sColor}">${s.mastery}%</div>
+                                ${s.questionsNeeded ? `<div style="font-size:0.55rem;color:var(--muted)">~${s.questionsNeeded}q</div>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+
+        // ── Divergence insights ──
+        if (data.divergenceInsights && data.divergenceInsights.length > 0) {
+            html += renderDivergenceSection(data.divergenceInsights);
+        }
+
+        // ── Signal legend ──
+        html += renderSignalLegend();
+
+        document.getElementById('diagBody').innerHTML = html;
+
     } catch (error) {
-        alert(`Diagnosis failed: ${error.message}`);
+        document.getElementById('diagBody').innerHTML = `<div class="diag-empty" style="color:var(--red)"><i class="bi bi-exclamation-triangle" style="color:var(--red)"></i>${error.message}</div>`;
     } finally {
         diagnosisRunning = false;
         btn.disabled = false;
         btn.textContent = '🔍 Diagnose Prerequisites';
     }
+}
+
+function renderDivergenceSection(insights) {
+    return `<div class="diag-section" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;margin-top:8px">
+        <div class="diag-section-title"><span style="color:var(--gold)">🔬 Model Divergence Insights</span><span class="diag-section-count">${insights.length}</span></div>
+        <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 8px">Concepts where BKT mastery estimate significantly disagrees with raw accuracy. May indicate guessing, model lag, or concept difficulty mismatch.</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+            ${insights.map(d => {
+                const isUnder = d.type === 'underestimated';
+                const icon = isUnder ? '📈' : '📉';
+                const label = isUnder ? 'Underestimated' : 'Overestimated';
+                const labelColor = isUnder ? 'var(--cyan)' : 'var(--gold)';
+                const desc = isUnder
+                    ? 'Student performs better than model predicts — BKT may need recalibration'
+                    : 'Model rates higher than actual performance — possible guessing or concept gap';
+                return `<div class="diag-node" onclick="diagNodeClick('${d.id}')" style="border:1px solid rgba(255,255,255,0.06);flex-direction:column;align-items:stretch;padding:10px 12px">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span style="font-size:0.9rem">${icon}</span>
+                        <span style="flex:1;font-size:0.82rem;color:var(--text);font-weight:500">${d.name}</span>
+                        <span style="font-size:0.7rem;font-weight:600;color:${labelColor}">${label}</span>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:center;padding:4px 0">
+                        <div style="flex:1">
+                            <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-bottom:2px">
+                                <span>BKT Mastery</span><span style="color:var(--text)">${d.mastery}%</span>
+                            </div>
+                            <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                                <div style="width:${d.mastery}%;height:100%;background:var(--purple);border-radius:2px"></div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.7rem;color:var(--gold);font-weight:700;flex-shrink:0">${d.magnitude}%<br><span style="font-size:0.5rem;font-weight:400;color:var(--muted)">gap</span></div>
+                        <div style="flex:1">
+                            <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-bottom:2px">
+                                <span>Raw Accuracy</span><span style="color:var(--text)">${d.accuracy}%</span>
+                            </div>
+                            <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                                <div style="width:${d.accuracy}%;height:100%;background:var(--cyan);border-radius:2px"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size:0.58rem;color:var(--muted);margin-top:2px">${desc} · ${d.questionsAnswered} questions analyzed</div>
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
 }
 
 function switchSubject(subject) {
@@ -1391,6 +1750,130 @@ switchView('chapters');
 })();
 function navigateToMission() {
     if (window._missionConceptId) window.location.href = '/practice/' + window._missionConceptId;
+}
+
+// ── Sparkline + Concept Stats ──
+function drawSparkline(canvasId, attempts) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !attempts.length) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = { top: 6, bottom: 6, left: 4, right: 4 };
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+
+    // Build cumulative mastery from attempts using simplified BKT
+    let mastery = 0.2;
+    const points = [mastery];
+    attempts.forEach(a => {
+        if (a.correct) {
+            mastery = mastery + (1 - mastery) * 0.12;
+        } else {
+            mastery = mastery * 0.92;
+        }
+        mastery = Math.min(mastery, 0.99);
+        mastery = Math.max(mastery, 0.05);
+        points.push(mastery);
+    });
+
+    const n = points.length;
+    if (n < 2) return;
+
+    // Draw 80% threshold line
+    const threshY = pad.top + plotH * (1 - 0.8);
+    ctx.strokeStyle = 'rgba(16,185,129,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, threshY);
+    ctx.lineTo(w - pad.right, threshY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw dots for correct/wrong
+    const xStep = plotW / (n - 1);
+    attempts.forEach((a, i) => {
+        const x = pad.left + (i + 1) * xStep;
+        const y = pad.top + plotH * (1 - points[i + 1]);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = a.correct ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.5)';
+        ctx.fill();
+    });
+
+    // Draw line
+    ctx.beginPath();
+    ctx.strokeStyle = '#7C3AED';
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < n; i++) {
+        const x = pad.left + i * xStep;
+        const y = pad.top + plotH * (1 - points[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Gradient fill under line
+    const grad = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
+    grad.addColorStop(0, 'rgba(124,58,237,0.15)');
+    grad.addColorStop(1, 'rgba(124,58,237,0)');
+    ctx.lineTo(pad.left + (n - 1) * xStep, h - pad.bottom);
+    ctx.lineTo(pad.left, h - pad.bottom);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+}
+
+function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return days + 'd ago';
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return weeks + 'w ago';
+    return Math.floor(days / 30) + 'mo ago';
+}
+
+async function loadConceptStats(conceptId) {
+    try {
+        const res = await fetch('/api/concept-stats/' + conceptId);
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+
+        // Sparkline
+        const wrap = document.getElementById('sparklineWrap');
+        if (data.attempts && data.attempts.length >= 2) {
+            wrap.style.display = 'block';
+            drawSparkline('sparklineCanvas', data.attempts);
+        } else {
+            wrap.style.display = 'none';
+        }
+
+        // Stats
+        document.getElementById('infoAccuracy').textContent = data.accuracy !== null ? data.accuracy + '%' : '—';
+        document.getElementById('infoAvgTime').textContent = data.avgTimeSeconds ? data.avgTimeSeconds + 's' : '—';
+        document.getElementById('infoUnsolved').textContent = data.unsolvedQuestions + ' / ' + data.totalQuestions;
+        document.getElementById('infoLastPracticed').textContent = timeAgo(data.lastPracticed);
+    } catch (e) {
+        document.getElementById('sparklineWrap').style.display = 'none';
+        document.getElementById('infoAccuracy').textContent = '—';
+        document.getElementById('infoAvgTime').textContent = '—';
+        document.getElementById('infoUnsolved').textContent = '—';
+        document.getElementById('infoLastPracticed').textContent = '—';
+    }
 }
 </script>
 </body>
