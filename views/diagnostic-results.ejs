@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assessment Complete — Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bg: #0A0F1E;
+            --surface: #111827;
+            --card: #1E293B;
+            --border: #1F2937;
+            --purple: #7C3AED;
+            --blue: #2563EB;
+            --gold: #F59E0B;
+            --cyan: #22D3EE;
+            --green: #10B981;
+            --red: #EF4444;
+            --text: #F1F5F9;
+            --muted: #94A3B8;
+            --dim: #64748B;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+        nav {
+            background: rgba(17,24,39,0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 0 1.5rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            backdrop-filter: blur(12px);
+        }
+        .brand { color: var(--gold); font-weight: 700; font-size: 1.2rem; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+
+        .results-wrap { max-width: 600px; margin: 0 auto; padding: 3rem 1rem; }
+
+        .results-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+            padding: 2.5rem;
+            text-align: center;
+        }
+
+        .check-icon { color: var(--green); font-size: 3.5rem; margin-bottom: 1rem; }
+        .results-title { color: var(--gold); font-size: 1.6rem; font-weight: 700; margin-bottom: 0.5rem; }
+
+        .score-ring {
+            width: 120px; height: 120px; border-radius: 50%;
+            border: 4px solid var(--border);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            margin: 1.5rem auto;
+            position: relative;
+        }
+        .score-ring::before {
+            content: '';
+            position: absolute; inset: -4px;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: var(--green);
+            border-right-color: var(--green);
+            transform: rotate(<%= result.percentage * 3.6 %>deg);
+        }
+        .score-num { font-size: 2rem; font-weight: 700; color: var(--text); }
+        .score-label { font-size: 0.75rem; color: var(--dim); }
+
+        .score-detail { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+        .summary-grid { display: flex; gap: 12px; justify-content: center; margin-bottom: 1.5rem; }
+        .summary-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            text-align: center;
+            flex: 1;
+        }
+        .summary-num { font-size: 1.4rem; font-weight: 700; }
+        .summary-num.green { color: var(--green); }
+        .summary-num.gold { color: var(--gold); }
+        .summary-num.red { color: var(--red); }
+        .summary-label { color: var(--dim); font-size: 0.72rem; margin-top: 2px; }
+
+        .results-hint { color: var(--dim); font-size: 0.82rem; margin-bottom: 1.5rem; line-height: 1.5; }
+        .results-hint i { color: var(--cyan); }
+
+        .btn-dashboard {
+            background: linear-gradient(135deg, var(--purple), var(--blue));
+            border: none; color: white; padding: 14px 40px; border-radius: 10px;
+            font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s;
+            text-decoration: none; display: inline-block;
+        }
+        .btn-dashboard:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,58,237,0.4); color: white; }
+
+        @media (max-width: 640px) {
+            .results-card { padding: 1.5rem; }
+            .summary-grid { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<nav>
+    <a class="brand" href="/"><i class="bi bi-diagram-3-fill"></i> Learn.ai</a>
+</nav>
+
+<div class="results-wrap">
+    <div class="results-card">
+        <div class="check-icon"><i class="bi bi-check-circle-fill"></i></div>
+        <h2 class="results-title">Assessment Complete</h2>
+
+        <div class="score-ring">
+            <div class="score-num"><%= result.percentage %>%</div>
+            <div class="score-label"><%= result.totalCorrect %>/<%= result.totalQuestions %></div>
+        </div>
+
+        <p class="score-detail">Your knowledge graph has been initialized across <strong><%= summary.total %></strong> concepts.</p>
+
+        <div class="summary-grid">
+            <div class="summary-box">
+                <div class="summary-num green"><%= summary.strong %></div>
+                <div class="summary-label">Strong</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-num gold"><%= summary.developing %></div>
+                <div class="summary-label">Developing</div>
+            </div>
+            <div class="summary-box">
+                <div class="summary-num red"><%= summary.needsWork %></div>
+                <div class="summary-label">Needs Work</div>
+            </div>
+        </div>
+
+        <p class="results-hint">
+            <i class="bi bi-info-circle me-1"></i>
+            Concepts you're strong in are already unlocked on your graph. Focus areas are highlighted so you know exactly where to start.
+        </p>
+
+        <a href="/" class="btn-dashboard"><i class="bi bi-graph-up me-2"></i>Go to Dashboard</a>
+    </div>
+</div>
+<script src="/js/translator.js"></script>
+</body>
+</html>
