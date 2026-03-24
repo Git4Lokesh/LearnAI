@@ -14,6 +14,7 @@ import { Strategy } from 'passport-local';
 import rateLimit from 'express-rate-limit';
 import { bktUpdate, bktNext, bktUpdateConcept, bktNextConcept, bktFit, bktFitDry, bktGetParams, bktGetAllParams, bktReloadParams } from './services/bktClient.js';
 import { checkPrerequisiteGaps, getOptimalLearningPath } from './services/prerequisiteService.js';
+import { diagnosePrerequisites } from './services/diagnosisEngine.js';
 import { extractTextFromPDF } from './services/pdfService.js';
 import { parseUploadedFile } from './services/fileParser.js';
 import { classifyQuestionConcept } from './services/conceptTagger.js';
@@ -2103,7 +2104,7 @@ app.post("/api/translate/batch", async (req, res) => {
 function applyDecay(mastery, lastUpdated) {
     if (!lastUpdated) return mastery;
     const days = (Date.now() - new Date(lastUpdated).getTime()) / 86400000;
-    return Math.max(mastery * Math.exp(-0.05 * days), 0.1);
+    return Math.max(mastery * Math.exp(-0.03 * days), 0.1);
 }
 
 app.get('/practice/:conceptId', ensureAuthenticated, async (req, res) => {
@@ -2150,28 +2151,23 @@ app.post('/practice/:conceptId/answer', ensureAuthenticated, async (req, res) =>
         if (question_id) {
             await db.query(
                 'INSERT INTO user_question_attempts (user_id, question_id, correct, time_taken_seconds) VALUES ($1,$2,$3,$4)',
-                [req.user.id, question_id, correct, time_taken_seconds]
+                [req.user.id, parseInt(question_id), correct, time_taken_seconds ? Math.round(Number(time_taken_seconds)) : null]
             );
         }
 
-        const prev = await getUserConceptMastery(req.user.id, conceptId);
+        // BKT service handles both mastery computation AND DB write via /update-concept
         const updated = await bktUpdateConcept({
             userId: req.user.id, skillId: conceptId,
-            correct: Boolean(correct), p_mastery: parseFloat(prev.mastery),
+            correct: Boolean(correct),
             difficulty_tier: Number(difficulty_tier) || 2,
             time_taken_seconds: time_taken_seconds ? Number(time_taken_seconds) : null
         });
         const newMastery = updated.posterior_mastery;
-        const newQA = prev.questions_answered + 1;
-        const newCA = prev.correct_answers + (correct ? 1 : 0);
 
-        await db.query(`
-            INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
-            VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id, concept_id) DO UPDATE
-            SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
-            [req.user.id, conceptId, newMastery, newQA, newCA]
-        );
+        // Read back the updated counts (BKT service already wrote mastery + incremented counts)
+        const afterUpdate = await getUserConceptMastery(req.user.id, conceptId);
+        const newQA = afterUpdate.questions_answered;
+        const newCA = afterUpdate.correct_answers;
 
         // Enhanced stagnation check with prerequisite analysis
         let stagnating = false;
@@ -2665,6 +2661,71 @@ app.get('/diagnostic/skip', ensureAuthenticated, async (req, res) => {
     res.redirect('/');
 });
 
+// Concept stats API - mastery history sparkline + unsolved question count
+app.get('/api/concept-stats/:conceptId', ensureAuthenticated, async (req, res) => {
+    try {
+        const { conceptId } = req.params;
+        const userId = req.user.id;
+        const instituteId = req.user.institute_id;
+
+        // 1. Mastery history: reconstruct from last 20 attempts
+        const attemptsRes = await db.query(
+            `SELECT uqa.correct, uqa.time_taken_seconds, uqa.attempted_at, q.difficulty_tier
+             FROM user_question_attempts uqa
+             JOIN questions q ON q.id = uqa.question_id
+             WHERE uqa.user_id = $1 AND q.concept_id = $2
+             ORDER BY uqa.attempted_at DESC LIMIT 20`,
+            [userId, conceptId]
+        );
+        // Reverse to chronological order
+        const attempts = attemptsRes.rows.reverse();
+
+        // 2. Total approved questions for this concept (respecting institute scope)
+        let totalQQuery = `SELECT COUNT(*) FROM questions WHERE concept_id = $1 AND status = 'approved'`;
+        const totalQParams = [conceptId];
+        if (instituteId) {
+            totalQQuery += ` AND (institute_id = $2 OR institute_id IS NULL)`;
+            totalQParams.push(instituteId);
+        }
+        const totalQRes = await db.query(totalQQuery, totalQParams);
+        const totalQuestions = parseInt(totalQRes.rows[0].count);
+
+        // 3. Distinct questions this user has attempted for this concept
+        const attemptedQRes = await db.query(
+            `SELECT COUNT(DISTINCT uqa.question_id)
+             FROM user_question_attempts uqa
+             JOIN questions q ON q.id = uqa.question_id
+             WHERE uqa.user_id = $1 AND q.concept_id = $2`,
+            [userId, conceptId]
+        );
+        const attemptedQuestions = parseInt(attemptedQRes.rows[0].count);
+        const unsolvedQuestions = Math.max(0, totalQuestions - attemptedQuestions);
+
+        // 4. Accuracy and avg time
+        const totalAttempts = attemptsRes.rows.length;
+        const correctCount = attemptsRes.rows.filter(a => a.correct).length;
+        const avgTime = totalAttempts > 0
+            ? Math.round(attemptsRes.rows.reduce((s, a) => s + (a.time_taken_seconds || 0), 0) / totalAttempts)
+            : null;
+
+        // 5. Last practiced
+        const lastPracticed = totalAttempts > 0 ? attemptsRes.rows[attemptsRes.rows.length - 1].attempted_at : null;
+
+        res.json({
+            attempts: attempts.map(a => ({ correct: a.correct, tier: a.difficulty_tier })),
+            totalQuestions,
+            attemptedQuestions,
+            unsolvedQuestions,
+            accuracy: totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : null,
+            avgTimeSeconds: avgTime,
+            lastPracticed
+        });
+    } catch (e) {
+        console.error('Concept stats error:', e);
+        res.status(500).json({ error: 'Failed to fetch concept stats' });
+    }
+});
+
 // Mastery Mode — graph-aware, pulls real questions from DB
 app.get('/master', ensureAuthenticated, async (req, res) => {
     res.render('master.ejs', {
@@ -2764,74 +2825,16 @@ app.post('/master/answer', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// Concept-specific prerequisite diagnosis API endpoint
+// Concept-specific prerequisite diagnosis API endpoint (v2 — multi-signal engine)
 app.post('/api/diagnose-concept', ensureAuthenticated, async (req, res) => {
     try {
         const { conceptId } = req.body;
-
-        // Set up Server-Sent Events
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        });
-
-        function sendEvent(type, data) {
-            res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
-        }
-
-        // Get prerequisite chain for this concept (recursive)
-        const visited = new Set();
-        const toCheck = [];
-
-        async function getPrereqChain(cId) {
-            if (visited.has(cId)) return;
-            visited.add(cId);
-            toCheck.push(cId);
-
-            const prereqRes = await db.query(
-                'SELECT prereq_id FROM concept_prerequisites WHERE concept_id = $1',
-                [cId]
-            );
-
-            for (const row of prereqRes.rows) {
-                await getPrereqChain(row.prereq_id);
-            }
-        }
-
-        await getPrereqChain(conceptId);
-
-        let gapsFound = 0;
-
-        // Check each concept in the chain
-        for (const cId of toCheck) {
-            sendEvent('checking', { conceptId: cId });
-
-            // Get mastery
-            const masteryRes = await db.query(
-                'SELECT mastery FROM user_concept_mastery WHERE user_id = $1 AND concept_id = $2',
-                [req.user.id, cId]
-            );
-
-            const mastery = masteryRes.rows[0]?.mastery || 0.2;
-
-            await new Promise(resolve => setTimeout(resolve, 500)); // Visual delay
-
-            if (mastery < 0.7) {
-                gapsFound++;
-                sendEvent('gap', { conceptId: cId, mastery: Math.round(mastery * 100) });
-            } else {
-                sendEvent('ok', { conceptId: cId, mastery: Math.round(mastery * 100) });
-            }
-        }
-
-        sendEvent('complete', { gapsFound, totalChecked: toCheck.length });
-        res.end();
-
+        if (!conceptId) return res.status(400).json({ error: 'conceptId required' });
+        const result = await diagnosePrerequisites(db, req.user.id, conceptId);
+        res.json(result);
     } catch (error) {
         console.error('Concept diagnosis error:', error);
-        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
-        res.end();
+        res.status(500).json({ error: error.message });
     }
 });
 app.post('/api/bkt/update', ensureAuthenticated, async (req, res) => {
@@ -3097,9 +3100,9 @@ async function calculateChapterMastery(userId, chapterId) {
 
         if (masteryResult.rows.length === 0) return null;
 
-        // Calculate weighted average (equal weights)
+        // Calculate average across ALL concepts in chapter (unattempted = 0)
         const totalMastery = masteryResult.rows.reduce((sum, row) => sum + parseFloat(row.mastery), 0);
-        return totalMastery / masteryResult.rows.length;
+        return totalMastery / conceptIds.length;
     } catch (error) {
         console.error('[KnowledgeGraph] Error calculating chapter mastery:', error.message, { userId, chapterId });
         return null;

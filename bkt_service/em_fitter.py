@@ -157,10 +157,8 @@ def _forward_backward(seq: List[Dict], p_init: float, p_learn: float,
         # Calculate dynamic p_forget based on precise timestamps
         t_delta = seq[t]['time'] - seq[t-1]['time']
         days = t_delta.total_seconds() / 86400.0
-        # Formula matches `_decay_mastery`: mastery * e^(-0.05 * days) -> meaning p_forget = 1 - e^(-0.05 * days)
-        p_forget = 1.0 - math.exp(-0.05 * days)
-        
-        # Transition
+        # Formula matches `_decay_mastery`: mastery * e^(-0.03 * days) -> meaning p_forget = 1 - e^(-0.03 * days)
+        p_forget = 1.0 - math.exp(-0.03 * days)
         # P(unmastered_t+1) = stayed unmastered OR forgot from mastered
         pred_u = prev_u * (1 - p_learn) + prev_m * p_forget
         # P(mastered_t+1) = learned from unmastered OR stayed mastered
@@ -188,7 +186,7 @@ def _forward_backward(seq: List[Dict], p_init: float, p_learn: float,
         # Dynamic p_forget for reverse pass
         t_delta = seq[t+1]['time'] - seq[t]['time']
         days = t_delta.total_seconds() / 86400.0
-        p_forget = 1.0 - math.exp(-0.05 * days)
+        p_forget = 1.0 - math.exp(-0.03 * days)
         bt_u = (1 - p_learn) * e_u_next * beta[t + 1][0] + p_learn * e_m_next * beta[t + 1][1]
         bt_m = p_forget * e_u_next * beta[t + 1][0] + (1 - p_forget) * e_m_next * beta[t + 1][1]
         normalizer = bt_u + bt_m
