@@ -37,9 +37,9 @@ TIER_EXPECTED_TIME = {1: 60, 2: 120, 3: 180}
 async def startup():
     global pool
     pool = await asyncpg.create_pool(
-        host='localhost', port=5432, user='postgres',
+        host=os.environ.get('DB_HOST', 'localhost'), port=5432, user='postgres',
         password=os.environ.get('db_password'),
-        database=os.environ.get('db_name', 'dblearn'),
+        database=os.environ.get('db_name', 'Content Storage'),
         min_size=2, max_size=10
     )
     logger.info("DB connection pool created")
@@ -300,9 +300,9 @@ async def get_db():
     if pool:
         return await pool.acquire()
     return await asyncpg.connect(
-        host='localhost', port=5432, user='postgres',
+        host=os.environ.get('DB_HOST', 'localhost'), port=5432, user='postgres',
         password=os.environ.get('db_password'),
-        database=os.environ.get('db_name', 'dblearn')
+        database=os.environ.get('db_name', 'Content Storage')
     )
 
 
