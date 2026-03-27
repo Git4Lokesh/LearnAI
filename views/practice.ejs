@@ -22,17 +22,39 @@
         .back-btn { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.08); color: var(--muted); border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
         .back-btn:hover { border-color: var(--purple); color: var(--text); background: rgba(124,58,237,0.1); }
 
-        .container { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
+        /* Layout */
+        .practice-main { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
 
         .concept-header { margin-bottom: 2rem; }
         .concept-header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; background: linear-gradient(135deg, var(--text), var(--text-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .concept-header p { color: var(--muted); font-size: 0.85rem; }
 
-        .mastery-bar-wrap { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .mastery-bar-wrap .label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
-        .mastery-bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-        .mastery-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-        .mastery-pct { font-size: 0.9rem; font-weight: 600; white-space: nowrap; text-shadow: 0 0 12px rgba(124,58,237,0.2); }
+        /* Fixed sidebar mastery bar — pinned to right edge */
+        .mastery-sidebar { position: fixed; right: 28px; top: 72px; width: 110px; height: calc(100vh - 88px); z-index: 8; display: flex; flex-direction: column; align-items: center; }
+        .mastery-sidebar-inner { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.25rem 0.85rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; gap: 0.85rem; height: 100%; }
+        .mastery-sidebar-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+        .mastery-pct { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 0 16px rgba(124,58,237,0.3); }
+        .mastery-status { font-size: 0.7rem; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+
+        /* The vertical track area */
+        .mastery-bar-area { flex: 1; display: flex; gap: 6px; align-items: stretch; width: 100%; min-height: 0; }
+        .mastery-zones { display: flex; flex-direction: column; width: 8px; flex-shrink: 0; }
+        .mastery-zones .zone { flex: 1; position: relative; }
+        .mastery-zones .zone:first-child { border-radius: 5px 5px 0 0; }
+        .mastery-zones .zone:last-child { border-radius: 0 0 5px 5px; }
+        .zone-hard { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.25); border-bottom: none; }
+        .zone-medium { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.25); border-bottom: none; }
+        .zone-easy { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.25); }
+        .mastery-track { position: relative; width: 36px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+        .mastery-fill-v { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 0 0 7px 7px; transition: height 0.6s cubic-bezier(0.4,0,0.2,1), background 0.4s ease; }
+        .mastery-tier-labels { display: flex; flex-direction: column; justify-content: space-between; padding: 2px 0; }
+        .tier-label { font-size: 0.65rem; font-weight: 600; display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+        .tier-label-hard { color: #EF4444; }
+        .tier-label-medium { color: #F59E0B; }
+        .tier-label-easy { color: #10B981; }
+
+        @keyframes masteryPulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 16px rgba(124,58,237,0.6); } }
+        .mastery-track.pulse { animation: masteryPulse 0.6s ease; }
 
         .question-card { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.75rem; margin-bottom: 1.5rem; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 6px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15); }
         .q-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
@@ -90,12 +112,25 @@
         .tier-toast.down { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: #10B981; }
         .tier-toast.show { opacity: 1; transform: translateY(0); }
 
-        @keyframes masteryPulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 12px rgba(124,58,237,0.6); } }
-        .mastery-bar.pulse { animation: masteryPulse 0.6s ease; }
-
-        /* Mobile optimization */
+        /* Mobile: collapse sidebar to compact fixed top bar */
         @media (max-width: 768px) {
-            .container { padding: 1rem 0.75rem; }
+            .practice-main { padding: 1rem 0.75rem; padding-top: 4rem; }
+            .mastery-sidebar { position: fixed; right: 0; left: 0; top: 56px; width: 100%; height: auto; flex-direction: row; z-index: 8; }
+            .mastery-sidebar-inner { flex-direction: row; height: auto; padding: 0.5rem 1rem; gap: 0.75rem; width: 100%; border-radius: 0; }
+            .mastery-bar-area { flex-direction: row; height: 8px; flex: 1; min-height: auto; align-items: center; }
+            .mastery-zones { flex-direction: row-reverse; width: auto; height: 8px; flex: 1; }
+            .mastery-zones .zone { border-radius: 0; }
+            .mastery-zones .zone:first-child { border-radius: 0 5px 5px 0; }
+            .mastery-zones .zone:last-child { border-radius: 5px 0 0 5px; }
+            .zone-hard { border-bottom: 1px solid rgba(239,68,68,0.25); border-right: none; }
+            .zone-medium { border-bottom: 1px solid rgba(245,158,11,0.25); border-right: none; }
+            .zone-easy { border-right: none; }
+            .mastery-track { width: auto; height: 8px; flex: 1; border-radius: 5px; }
+            .mastery-fill-v { bottom: auto; top: 0; left: 0; right: auto; height: 100% !important; border-radius: 5px 0 0 5px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1), background 0.4s ease; }
+            .mastery-tier-labels { display: none; }
+            .mastery-sidebar-label { display: none; }
+            .mastery-pct { font-size: 0.9rem; }
+            .mastery-status { font-size: 0.58rem; }
             .option-label { padding: 14px 16px; font-size: 0.95rem; min-height: 48px; }
             .option-text { font-size: 0.95rem; }
             .question-text { font-size: 1.05rem; overflow-x: auto; }
@@ -113,46 +148,64 @@
 
 <div class="tier-toast" id="tierToast"></div>
 
-<div class="container">
-    <div class="concept-header">
-        <h1><%= concept.name %></h1>
-        <p><%= concept.subject %> · <%= questions.length %> question<%= questions.length !== 1 ? 's' : '' %> available</p>
-    </div>
-
-    <div class="mastery-bar-wrap">
-        <span class="label">Mastery</span>
-        <div class="mastery-bar" id="masteryBar">
-            <div class="mastery-fill" id="masteryFill" style="width:<%= Math.round(mastery*100) %>%; background:<%= mastery >= 0.8 ? '#10B981' : mastery >= 0.4 ? '#F59E0B' : '#3B82F6' %>"></div>
+<div class="practice-main">
+        <div class="concept-header">
+            <h1><%= concept.name %></h1>
+            <p><%= concept.subject %> · <%= questions.length %> question<%= questions.length !== 1 ? 's' : '' %> available</p>
         </div>
-        <span class="mastery-pct" id="masteryPct"><%= Math.round(mastery*100) %>%</span>
-        <% if (mastery < 0.3) { %>
-        <span style="font-size:0.7rem;color:#EF4444;margin-left:8px">⚠ Low</span>
-        <% } else if (mastery >= 0.8) { %>
-        <span style="font-size:0.7rem;color:#10B981;margin-left:8px">✓ Mastered</span>
+
+        <% if (decayedBy >= 2) { %>
+        <p style="font-size:0.78rem;color:#F59E0B;margin:0 0 1.25rem;display:flex;align-items:center;gap:6px">
+            <i class="bi bi-graph-down"></i> Mastery adjusted <strong>-<%= decayedBy %>%</strong> for inactivity
+        </p>
         <% } %>
-    </div>
-    <% if (decayedBy >= 2) { %>
-    <p style="font-size:0.78rem;color:#F59E0B;margin:-0.75rem 0 1.25rem;display:flex;align-items:center;gap:6px">
-        <i class="bi bi-graph-down"></i> Mastery adjusted <strong>-<%= decayedBy %>%</strong> for inactivity
-    </p>
-    <% } %>
 
-    <div class="mastered-banner" id="masteredBanner" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:1.5rem;text-align:center;margin-bottom:1.5rem;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 0 20px rgba(16,185,129,0.1)">
-        <h4 style="color:#10B981">🎉 Concept Mastered!</h4>
-        <p style="color:var(--muted);font-size:0.85rem;margin:0">You've reached 80%+ mastery. Adjacent concepts may now be unlocked.</p>
-    </div>
+        <div class="mastered-banner" id="masteredBanner" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:1.5rem;text-align:center;margin-bottom:1.5rem;display:none;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 0 20px rgba(16,185,129,0.1)">
+            <h4 style="color:#10B981">🎉 Concept Mastered!</h4>
+            <p style="color:var(--muted);font-size:0.85rem;margin:0">You've reached 80%+ mastery. Adjacent concepts may now be unlocked.</p>
+        </div>
 
-    <% if (questions.length === 0) { %>
-    <div class="no-questions">
-        <i class="bi bi-inbox"></i>
-        <p>No approved questions available for this concept yet.</p>
-        <a href="/" class="back-btn" style="display:inline-flex; margin-top:1rem">Back to graph</a>
-    </div>
-    <% } else { %>
+        <% if (questions.length === 0) { %>
+        <div class="no-questions">
+            <i class="bi bi-inbox"></i>
+            <p>No approved questions available for this concept yet.</p>
+            <a href="/" class="back-btn" style="display:inline-flex; margin-top:1rem">Back to graph</a>
+        </div>
+        <% } else { %>
+        <div id="questionArea"></div>
+        <% } %>
+</div>
 
-    <div id="questionArea"></div>
-
-    <% } %>
+<!-- Fixed mastery sidebar -->
+<div class="mastery-sidebar">
+        <div class="mastery-sidebar-inner">
+            <span class="mastery-sidebar-label">Mastery</span>
+            <span class="mastery-pct" id="masteryPct" style="color:<%= mastery >= 0.6 ? '#EF4444' : mastery >= 0.33 ? '#F59E0B' : '#10B981' %>"><%= Math.round(mastery*100) %>%</span>
+            <% if (mastery < 0.33) { %>
+            <span class="mastery-status" style="background:rgba(16,185,129,0.15);color:#10B981">Easy</span>
+            <% } else if (mastery < 0.6) { %>
+            <span class="mastery-status" style="background:rgba(245,158,11,0.15);color:#F59E0B">Medium</span>
+            <% } else if (mastery < 0.8) { %>
+            <span class="mastery-status" style="background:rgba(239,68,68,0.15);color:#EF4444">Hard</span>
+            <% } else { %>
+            <span class="mastery-status" style="background:rgba(16,185,129,0.15);color:#10B981">✓ Mastered</span>
+            <% } %>
+            <div class="mastery-bar-area">
+                <div class="mastery-zones">
+                    <div class="zone zone-hard"></div>
+                    <div class="zone zone-medium"></div>
+                    <div class="zone zone-easy"></div>
+                </div>
+                <div class="mastery-track" id="masteryBar">
+                    <div class="mastery-fill-v" id="masteryFill" style="height:<%= Math.round(mastery*100) %>%; background:<%= mastery >= 0.6 ? 'linear-gradient(to top, #10B981, #F59E0B, #EF4444)' : mastery >= 0.33 ? 'linear-gradient(to top, #10B981, #F59E0B)' : '#10B981' %>"></div>
+                </div>
+                <div class="mastery-tier-labels">
+                    <div class="tier-label tier-label-hard"><i class="bi bi-fire"></i> Hard</div>
+                    <div class="tier-label tier-label-medium"><i class="bi bi-lightning"></i> Med</div>
+                    <div class="tier-label tier-label-easy"><i class="bi bi-check-circle"></i> Easy</div>
+                </div>
+            </div>
+        </div>
 </div>
 
 <script>
@@ -167,6 +220,7 @@ let sessionCorrect = 0;
 let sessionTotal = 0;
 const seenIds = new Set();
 let prevTier = null;
+const isMobile = window.innerWidth <= 768;
 
 const keys = ['A','B','C','D'];
 const optKeys = ['option1','option2','option3','option4'];
@@ -289,15 +343,12 @@ async function submitAnswer() {
             currentMastery = data.mastery;
             updateMasteryBar(data.mastery);
             
-            // Check if we need to fetch harder questions
             const oldTier = oldMastery < 0.4 ? 1 : oldMastery < 0.7 ? 2 : 3;
             const newTier = currentMastery < 0.4 ? 1 : currentMastery < 0.7 ? 2 : 3;
             
             if (newTier > oldTier) {
-                // Mastery increased, fetch harder questions
                 const newQuestions = await fetchAdaptiveQuestions(newTier);
                 if (newQuestions && newQuestions.length > 0) {
-                    // Replace remaining questions with harder ones
                     questions.splice(currentIdx + 1, questions.length - currentIdx - 1, ...newQuestions);
                     showTierToast(oldTier, newTier);
                 }
@@ -325,9 +376,7 @@ async function fetchAdaptiveQuestions(tier) {
         const res = await fetch(`/api/adaptive-questions/${conceptId}?tier=${tier}`);
         const data = await res.json();
         if (data.questions && data.questions.length > 0) {
-            // Filter out questions we've already seen
-            const newQuestions = data.questions.filter(nq => !seenIds.has(nq.id));
-            return newQuestions;
+            return data.questions.filter(nq => !seenIds.has(nq.id));
         }
         return [];
     } catch(e) {
@@ -338,19 +387,53 @@ async function fetchAdaptiveQuestions(tier) {
 
 function updateMasteryBar(m) {
     const pct = Math.round(m * 100);
-    const color = m >= 0.8 ? '#10B981' : m >= 0.4 ? '#F59E0B' : '#3B82F6';
-    document.getElementById('masteryFill').style.width = pct + '%';
-    document.getElementById('masteryFill').style.background = color;
-    document.getElementById('masteryPct').textContent = pct + '%';
+    const fill = document.getElementById('masteryFill');
+    const pctEl = document.getElementById('masteryPct');
+    
+    let bg, pctColor, statusText, statusBg;
+    if (m >= 0.6) {
+        bg = 'linear-gradient(to top, #10B981, #F59E0B, #EF4444)';
+        pctColor = '#EF4444';
+        statusText = m >= 0.8 ? '✓ Mastered' : 'Hard';
+        statusBg = m >= 0.8 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)';
+    } else if (m >= 0.33) {
+        bg = 'linear-gradient(to top, #10B981, #F59E0B)';
+        pctColor = '#F59E0B';
+        statusText = 'Medium';
+        statusBg = 'rgba(245,158,11,0.15)';
+    } else {
+        bg = '#10B981';
+        pctColor = '#10B981';
+        statusText = 'Easy';
+        statusBg = 'rgba(16,185,129,0.15)';
+    }
+    
+    // On mobile, use width instead of height
+    if (window.innerWidth <= 768) {
+        fill.style.width = pct + '%';
+        fill.style.height = '100%';
+    } else {
+        fill.style.height = pct + '%';
+    }
+    fill.style.background = bg;
+    pctEl.textContent = pct + '%';
+    pctEl.style.color = pctColor;
+    
+    const statusEl = document.querySelector('.mastery-status');
+    if (statusEl) {
+        statusEl.textContent = statusText;
+        statusEl.style.background = statusBg;
+        statusEl.style.color = pctColor;
+    }
+    
     const bar = document.getElementById('masteryBar');
     bar.classList.remove('pulse');
-    void bar.offsetWidth; // reflow to restart animation
+    void bar.offsetWidth;
     bar.classList.add('pulse');
 }
 
 function nextQuestion() {
     currentIdx++;
-    // If we've run out of questions, show summary
     if (currentIdx >= questions.length) {
         showSessionSummary();
         return;

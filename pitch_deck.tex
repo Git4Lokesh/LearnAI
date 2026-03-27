@@ -1,0 +1,300 @@
+\documentclass[aspectratio=169, 10pt]{beamer}
+
+% ── Theme & Colors ──────────────────────────────────────────
+\usetheme[numbering=fraction, progressbar=frametitle, sectionpage=none]{metropolis}
+\usefonttheme{default}
+\definecolor{LearnBlue}{RGB}{0, 102, 204}
+\definecolor{LearnDark}{RGB}{20, 30, 48}
+\definecolor{LearnAccent}{RGB}{0, 200, 150}
+\definecolor{LearnGray}{RGB}{240, 242, 245}
+\definecolor{LearnRed}{RGB}{220, 53, 69}
+\definecolor{LearnGreen}{RGB}{34, 197, 94}
+\definecolor{LearnYellow}{RGB}{234, 179, 8}
+
+\setbeamercolor{palette primary}{bg=LearnDark, fg=white}
+\setbeamercolor{frametitle}{bg=LearnDark, fg=white}
+\setbeamercolor{title}{fg=LearnDark}
+\setbeamercolor{subtitle}{fg=LearnBlue}
+\setbeamercolor{alerted text}{fg=LearnBlue}
+\setbeamercolor{block title}{bg=LearnBlue, fg=white}
+\setbeamercolor{block body}{bg=LearnGray}
+\setbeamercolor{item}{fg=LearnBlue}
+
+\setbeamerfont{title}{size=\Large, series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+\setbeamerfont{frametitle}{size=\large, series=\bfseries}
+
+% ── Packages ────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usepackage{textcomp}
+
+% ── Spacing ─────────────────────────────────────────────────
+\setlength{\parskip}{0.4em}
+\newcommand{\bspace}{\vspace{0.3em}}
+
+% ── Meta ────────────────────────────────────────────────────
+\title{Learn.ai}
+\subtitle{The Diagnostic Feedback OS for Indian Education}
+\author{3 BITS Pilani Engineers}
+\date{Pre-Seed \enspace | \enspace MVP Production-Ready}
+\institute{}
+
+% ════════════════════════════════════════════════════════════
+\begin{document}
+
+% ── Slide 1: Title ──────────────────────────────────────────
+\begin{frame}[plain]
+  \maketitle
+  \vfill
+  \centering
+  \small\textcolor{LearnBlue}{\textbf{Our Mission:} Empowering Every Institute with Diagnostic Intelligence.}
+\end{frame}
+
+% ── Slide 2: Our Story ─────────────────────────────────────
+\begin{frame}{Why Us -- We Lived This Problem}
+
+  \textbf{We are 3 BITS Pilani engineers who went through the JEE coaching system ourselves.}
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item We sat in those classrooms. We watched friends fail Rotational Mechanics---not because it was hard, but because \emph{nobody caught their Vectors gap} three months earlier.
+
+    \item We were the ``silent strugglers''---students who guessed correctly on tests but had \textbf{zero actual understanding}, and no teacher ever noticed.
+
+    \item We saw our coaching centers drown in test data they couldn't act on. Hundreds of mock tests, thousands of scores---\textbf{zero diagnostic insight}.
+
+    \item We built Learn.ai because we know \emph{exactly} what's broken, and we have the engineering skills to fix it.
+  \end{itemize}
+
+  \vspace{0.4em}
+  \begin{block}{}
+    \centering
+    \small \textbf{Domain expertise + technical depth} = unfair founder-market fit.
+  \end{block}
+\end{frame}
+
+% ── Slide 3: The Problem ────────────────────────────────────
+\begin{frame}{The Problem -- A Broken Feedback Loop}
+  \small
+  Coaching centers, schools, and institutes test constantly---but only see \textbf{final MCQ scores}. The diagnostic layer is completely missing.
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{\textcolor{LearnRed}{The Analytics Blindspot:}} A teacher with 500+ students cannot manually analyze \emph{why} a cohort is failing. They see scores, not root causes.
+
+    \item \textbf{\textcolor{LearnRed}{Silent Strugglers:}} Students who guess correctly or take 3$\times$ too long go \emph{completely unnoticed}. Traditional grading rewards luck, not understanding.
+
+    \item \textbf{\textcolor{LearnRed}{Hidden Prerequisites:}} A student fails ``Projectile Motion'' because of a hidden backlog in ``Vectors''---traditional tools cannot map these dependency chains.
+
+    \item \textbf{\textcolor{LearnRed}{Universal Pain:}} This isn't just coaching centers. \textbf{Every CBSE/ICSE school with 11th--12th science}, every integrated school, every institute preparing students for competitive exams faces the same blind spot.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 4: The Solution ───────────────────────────────────
+\begin{frame}{The Solution -- Pedagogy-as-a-Service (PaaS)}
+  A \textbf{B2B Learning OS} powered by \textbf{Bayesian Knowledge Tracing (BKT)} and a proprietary \textbf{Hierarchical Knowledge Graph}.
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{Massive Knowledge Graph:} Visually maps \textbf{73 JEE chapters} and \textbf{221 sub-concepts} exactly to the NTA syllabus. Extensible to NEET, boards, and custom curricula.
+
+    \item \textbf{Transparent Mastery:} Nodes dynamically turn \textcolor{LearnGreen}{\textbf{Green}} (Mastered), \textcolor{LearnYellow}{\textbf{Yellow}} (In Progress), or \textcolor{LearnRed}{\textbf{Red}} (Weak) based on real student data.
+
+    \item \textbf{BKT State Update:} Dynamically calculates mastery probability accounting for question difficulty, guessing, slipping, and time-taken.
+
+    \item \textbf{BKT-Aware AI Tutor:} Our LLM reads the student's \emph{live} mastery state---weak concepts, prerequisite gaps, confidence scores---to generate progressive, personalized hints. The AI \textbf{knows what the student doesn't know}.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 5a: Core IP ───────────────────────────────────────
+\begin{frame}{Core IP \& Technology Stack}
+  Enterprise-grade architecture built to scale across \textbf{hundreds of institutes}.
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{Adaptive Learning Engine:} Custom Python FastAPI microservice using the \textbf{Expectation-Maximization (EM)} algorithm to learn optimal BKT parameters from student responses.
+
+    \item \textbf{Mastery Tracking:} \emph{Mastery decay} (models forgetting over time) + \emph{time-weighted updates} (fast correct answers boost mastery more).
+
+    \item \textbf{Prerequisite Diagnosis Engine:} Combines decayed mastery, confidence, recency, and accuracy into readiness scores. Generates optimal \textbf{10-step study paths} with explanations.
+
+    \item \textbf{AI Layer:} A \textbf{BKT-aware AI tutor} powered by Gemini 2.5 Flash with deep context injection. The LLM reads the student's \emph{live mastery state} from the BKT engine---their weak concepts, prerequisite gaps, and confidence levels---to generate truly personalized, progressive hints rather than generic answers. This stateful approach is architecturally unique: the AI \emph{knows what the student doesn't know}.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 5b: Tech Stack Table ──────────────────────────────
+\begin{frame}{Technology Stack}
+  \centering
+  \vspace{0.5em}
+  \begin{tabular}{@{} >{\bfseries\color{LearnBlue}}l l @{}}
+    \toprule
+    \textbf{Layer} & \textbf{Technology} \\
+    \midrule
+    Backend \& DB      & Node.js (Express 5), PostgreSQL \\
+    ML Engine          & Python FastAPI (BKT Engine) \\
+    AI Integration     & BKT-Aware LLM (Gemini 2.5 Flash + mastery context injection) \\
+    Frontend           & EJS Templates, Vanilla JS, D3.js \\
+    Infrastructure     & Docker, Docker Compose \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{1.2em}
+  \begin{block}{}
+    \centering
+    \small Fully containerized. Multi-tenant from day one. Zero vendor lock-in.
+  \end{block}
+\end{frame}
+
+% ── Slide 6: Cold Start ────────────────────────────────────
+\begin{frame}{Solving the ``Cold Start'' -- Day 1 Value}
+  How do we deliver value \textbf{immediately} upon deployment---even mid-year?
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{Adaptive Diagnostic Engine:} Students take a dynamic, \textbf{30-minute onboarding assessment} on day one.
+
+    \item \textbf{Hierarchical Graph Traversal:} Tests high-level ``Terminal Nodes'' first. Success $\rightarrow$ infer prerequisite mastery. Failure $\rightarrow$ step down the chain to isolate the exact gap.
+
+    \item \textbf{Instant Initialization:} Seeds the BKT algorithm with accurate initial probability weights $P(L_0)$ in under an hour.
+
+    \item \textbf{Immediate ROI:} The Institute Director gets a fully populated, actionable analytics dashboard \textbf{on the very first day}. No 3-month ``data collection'' phase.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 7: Teacher X-Ray Vision ──────────────────────────
+\begin{frame}{The Value Prop -- Teacher X-Ray Vision}
+  Transforming how teachers start their week through \textbf{Batch Intelligence}.
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.45em}
+    \item \textbf{Actionable Gap Reports:} Graph-driven \textbf{Gap Reports} per batch---not spreadsheets of scores.
+
+    \item \textbf{Class Diagnosis:} \emph{``15 students in Batch A are failing Rotational Mechanics. Root cause: Cross Products prerequisite is glowing red. Generate 5 remedial questions with 1-click.''}
+
+    \item \textbf{AI Auto-Tagging:} Upload legacy PDFs/CSVs of questions. Gemini 2.5 Flash auto-tags them to 221 micro-concepts, saving \textbf{hundreds of hours}.
+
+    \item \textbf{Parent-Facing Report Cards:} Automated, branded PDF reports showing subject-to-concept mastery. Makes PTA meetings \textbf{data-driven}---a massive differentiator for schools competing for admissions.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 8: Market & Business Model ──────────────────────
+\begin{frame}{Market Opportunity \& Business Model}
+  \small
+  \textbf{TAM:} Not just coaching centers. \textbf{Every institution} teaching 11th--12th science needs diagnostic intelligence.
+
+  \bspace
+  \begin{itemize}
+    \setlength\itemsep{0.4em}
+    \item \textbf{Segment 1 -- Premium Schools} (CBSE/ICSE with 11th--12th science): Schools like Manthan actively seek tech differentiation. Higher budgets, longer contracts, parent willingness to pay for ``AI-powered learning.''
+
+    \item \textbf{Segment 2 -- Coaching Institutes:} Mid-sized JEE/NEET centers (100--2{,}000 students) losing ground to PW/Allen. Our tool is their competitive equalizer.
+
+    \item \textbf{Segment 3 -- Integrated Schools:} Schools with in-house coaching divisions. Largest seat counts, highest LTV.
+  \end{itemize}
+
+  \vspace{0.3em}
+  \begin{block}{Unit Economics}
+    \centering
+    \small Per-seat: \textbf{150--300/student/month}. \enspace 1 institute (1{,}000 students) = \textbf{2L MRR}. \enspace 10 institutes = \textbf{2.4 Cr ARR}.\\[0.2em]
+    B2B sales: acquire 1{,}000 users with a single handshake. Switching costs are \emph{prohibitively high}.
+  \end{block}
+\end{frame}
+
+% ── Slide 9: Why Not In-House? ─────────────────────────────
+\begin{frame}{Why Won't They Build This In-House?}
+  \small
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{The Talent Cost:} Hiring full-stack + ML engineers costs \textbf{30L--50L+ annually}. Schools and coaching centers are run by educators, not CTOs.
+
+    \item \textbf{The Data Cold Start:} BKT needs massive aggregated student data to train accurately. A single institute can't generate enough in isolation. \textbf{We pool anonymized data across all clients}---a compounding network effect.
+
+    \item \textbf{The Maintenance Nightmare:} LLM context management, API rate limits, prompt-injection prevention, model updates---this is a full-time engineering operation.
+  \end{itemize}
+
+  \vspace{0.5em}
+  \begin{block}{}
+    \centering
+    They need \textbf{plug-and-play}. We sell the picks and shovels during a gold rush.
+  \end{block}
+\end{frame}
+
+% ── Slide 10: Defensible Moat ─────────────────────────────
+\begin{frame}{Our Defensible Moat}
+  \small
+  \begin{itemize}
+    \setlength\itemsep{0.5em}
+    \item \textbf{\textcolor{LearnRed}{The Oligopoly} (PW, Allen):} They have this tech but use it to capture B2C share and \emph{destroy} local institutes. They will \textbf{never} license it to competitors.\\[0.2em]
+    \hspace{1em}\textcolor{LearnBlue}{$\rightarrow$ We ``arm the rebels.''}
+
+    \item \textbf{\textcolor{LearnYellow}{Infrastructure SaaS} (Classplus, Teachmint):} They provide ``plumbing'' (Zoom, fees, generic tests). They \textbf{lack a proprietary mathematical Knowledge Graph}.
+
+    \item \textbf{\textcolor{LearnGreen}{The Cross-Chapter Diagnostic Moat:}} Competitors treat subjects in silos. We map \textbf{``Golden Edges''}---cross-chapter dependencies (Math Integration $\rightarrow$ Physics Work-Energy). This interdisciplinary engine is \emph{mathematically complex to replicate} and creates a massive ``aha!'' moment.
+
+    \item \textbf{\textcolor{LearnBlue}{Data Network Effect:}} Every new institute's anonymized data improves BKT parameters for \emph{all} clients. First-mover with 10+ institutes becomes nearly impossible to displace.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 11: Traction & Validation ───────────────────────
+\begin{frame}{Early Traction \& Validation}
+  \begin{itemize}
+    \setlength\itemsep{0.6em}
+    \item \textbf{MVP Complete:} Production-ready platform with multi-tenant architecture, BKT engine, diagnostic onboarding, teacher dashboards, and AI auto-tagging.
+
+    \item \textbf{Content Seeded:} \textbf{3{,}500+ hand-crafted JEE-level MCQs} across 221 knowledge graph nodes. Every question has verified solutions, difficulty tiers, and concept mappings.
+
+    \item \textbf{Pilot Pipeline:} In active conversations with \textbf{Manthan International School} (Hyderabad) and \textbf{Adhyapak Coaching} for 60-day free pilot deployments targeting their 11th--12th science cohorts.
+
+    \item \textbf{Founder-Market Fit:} BITS Pilani engineers who went through JEE coaching ourselves. We built the product we wished existed.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 12: Roadmap ─────────────────────────────────────
+\begin{frame}{Product Roadmap -- Deepening the Moat}
+  \begin{itemize}
+    \setlength\itemsep{0.7em}
+    \item \textbf{\textcolor{LearnGreen}{Phase 1: The Core OS} \small(Current -- MVP Complete)}\\
+    Multi-tenant architecture, BKT inference engine, Dependency Graph routing, AI auto-tagging, parent report cards.
+
+    \item \textbf{\textcolor{LearnBlue}{Phase 2: DKT + Proprietary LLM} \small(Next 12 Months)}\\
+    Transition to \textbf{Deep Knowledge Tracing (DKT)} with cross-institute data. Fine-tune a \textbf{proprietary local LLM} on millions of student interactions---slashing API costs, enabling on-premise deployment, and creating an AI tutor no competitor can replicate.
+
+    \item \textbf{\textcolor{LearnAccent}{Phase 3: Visual AI Diagnostics} \small(18+ Months)}\\
+    Students upload photos of handwritten rough work. \textbf{Computer Vision} pinpoints the exact line of mathematical failure, updating the knowledge graph automatically.
+  \end{itemize}
+\end{frame}
+
+% ── Slide 13: The Ask ─────────────────────────────────────
+\begin{frame}{The Ask}
+  \centering
+  \vspace{0.5em}
+
+  {\Large\textbf{Raising 25--40L Pre-Seed}}
+
+  \vspace{1em}
+
+  \begin{itemize}
+    \setlength\itemsep{0.6em}
+    \item \textbf{Use of Funds:} Cloud infrastructure + LLM API costs during 60-day free pilots with \textbf{Manthan International, Adhyapak, and 1--3 additional institutes} in Hyderabad/Kota.
+
+    \item \textbf{Milestone:} Generate undeniable case studies---measurable mock-test score improvements within one academic quarter.
+
+    \item \textbf{Beyond Capital:} Strategic mentorship for enterprise B2B SaaS sales cycles, data privacy compliance, and scaling GTM.
+  \end{itemize}
+
+  \vspace{1.2em}
+  {\Large\textcolor{LearnBlue}{\textbf{Let's build the diagnostic layer Indian education is missing.}}}
+\end{frame}
+
+\end{document}

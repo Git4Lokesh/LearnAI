@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= concept.name %> — Locked</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <style>
+        :root { --muted: var(--text-dim); }
+        body { min-height: 100vh; }
+        nav { background: rgba(17,24,39,0.8); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        .brand { color: var(--gold); font-weight: 700; font-size: 1.1rem; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .back-btn { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.08); color: var(--muted); border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .back-btn:hover { border-color: var(--purple); color: var(--text); background: rgba(124,58,237,0.1); }
+        .container { max-width: 640px; margin: 0 auto; padding: 3rem 1rem; }
+        .locked-card { background: var(--glass-bg, var(--surface)); border: 1px solid rgba(239,68,68,0.2); border-radius: 16px; padding: 2rem; text-align: center; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+        .lock-icon { font-size: 3rem; color: #EF4444; margin-bottom: 1rem; display: block; }
+        .locked-card h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .locked-card .reason { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .prereq-list { text-align: left; margin: 0 auto; max-width: 400px; }
+        .prereq-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 0.5rem; transition: all 0.2s; }
+        .prereq-item:hover { border-color: rgba(124,58,237,0.3); background: rgba(124,58,237,0.05); }
+        .prereq-name { font-size: 0.85rem; color: var(--text); }
+        .prereq-mastery { font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; }
+        .mastery-low { background: rgba(239,68,68,0.15); color: #EF4444; }
+        .mastery-mid { background: rgba(245,158,11,0.15); color: #F59E0B; }
+        .unit-label { font-size: 0.7rem; color: var(--muted); margin-top: 1rem; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; text-align: left; }
+        .btn-back { display: inline-block; margin-top: 1.5rem; background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; color: white; padding: 10px 24px; border-radius: 10px; font-weight: 600; text-decoration: none; transition: all 0.3s; }
+        .btn-back:hover { box-shadow: 0 8px 24px rgba(124,58,237,0.4); transform: translateY(-2px); color: white; }
+    </style>
+</head>
+<body>
+<nav>
+    <a class="brand" href="/"><i class="bi bi-diagram-3-fill"></i> Learn.ai</a>
+    <a class="back-btn" href="/"><i class="bi bi-arrow-left"></i> Knowledge Graph</a>
+</nav>
+<div class="container">
+    <div class="locked-card">
+        <i class="bi bi-lock-fill lock-icon" aria-hidden="true"></i>
+        <h2><%= concept.name %></h2>
+        <% if (reason === 'unit_locked') { %>
+        <p class="reason">This subconcept's unit is locked. Master all subconcepts in the prerequisite units first.</p>
+        <% } else { %>
+        <p class="reason">Complete the prerequisite subconcepts below before practicing this topic.</p>
+        <% } %>
+        <div class="prereq-list" role="list">
+            <% 
+            // Group by unit if unit_locked
+            const grouped = {};
+            unmetPrereqs.forEach(p => {
+                const key = p.unitName || 'Prerequisites';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(p);
+            });
+            Object.keys(grouped).forEach(unitName => { %>
+                <% if (reason === 'unit_locked') { %>
+                <div class="unit-label"><%= unitName %></div>
+                <% } %>
+                <% grouped[unitName].forEach(p => { %>
+                <div class="prereq-item" role="listitem">
+                    <span class="prereq-name"><%= p.name %></span>
+                    <span class="prereq-mastery <%= p.mastery < 0.4 ? 'mastery-low' : 'mastery-mid' %>"><%= Math.round(p.mastery * 100) %>%</span>
+                </div>
+                <% }); %>
+            <% }); %>
+        </div>
+        <a href="/" class="btn-back"><i class="bi bi-arrow-left me-1"></i> Back to Knowledge Graph</a>
+    </div>
+</div>
+</body>
+</html>
