@@ -6,6 +6,7 @@ import { getQuestionFromDB } from '../helpers/questions.js';
 import { bktUpdateConcept, bktNextConcept, bktUpdate, bktNext } from '../services/bktClient.js';
 import { checkPrerequisiteGaps, getOptimalLearningPath } from '../services/prerequisiteService.js';
 import { diagnosePrerequisites } from '../services/diagnosisEngine.js';
+import { isSubconceptUnlocked } from '../services/gatingService.js';
 
 const router = express.Router();
 
@@ -18,6 +19,18 @@ router.get('/practice/:conceptId', ensureAuthenticated, async (req, res) => {
             db.query('SELECT mastery, last_updated FROM user_concept_mastery WHERE user_id=$1 AND concept_id=$2', [req.user.id, conceptId])
         ]);
         if (!conceptRes.rows[0]) return res.status(404).send('Concept not found');
+
+        // Prerequisite gating check
+        const gateResult = await isSubconceptUnlocked(db, req.user.id, conceptId);
+        if (!gateResult.unlocked) {
+            return res.status(403).render('practice-locked.ejs', {
+                concept: conceptRes.rows[0],
+                reason: gateResult.reason,
+                unmetPrereqs: gateResult.unmetPrereqs,
+                user: req.user
+            });
+        }
+
         const storedMastery = parseFloat(masteryRes.rows[0]?.mastery || 0.2);
         const mastery = masteryRes.rows[0] ? applyDecay(storedMastery, masteryRes.rows[0].last_updated) : storedMastery;
         const decayedBy = Math.round((storedMastery - mastery) * 100);
