@@ -14,6 +14,7 @@ import { Strategy } from 'passport-local';
 import rateLimit from 'express-rate-limit';
 import { bktUpdate, bktNext, bktUpdateConcept, bktNextConcept, bktFit, bktFitDry, bktGetParams, bktGetAllParams, bktReloadParams } from './services/bktClient.js';
 import { checkPrerequisiteGaps, getOptimalLearningPath } from './services/prerequisiteService.js';
+import { isSubconceptUnlocked } from './services/gatingService.js';
 import { diagnosePrerequisites } from './services/diagnosisEngine.js';
 import { extractTextFromPDF } from './services/pdfService.js';
 import { parseUploadedFile } from './services/fileParser.js';
@@ -2115,6 +2116,18 @@ app.get('/practice/:conceptId', ensureAuthenticated, async (req, res) => {
             db.query('SELECT mastery, last_updated FROM user_concept_mastery WHERE user_id=$1 AND concept_id=$2', [req.user.id, conceptId])
         ]);
         if (!conceptRes.rows[0]) return res.status(404).send('Concept not found');
+
+        // Prerequisite gating check
+        const gateResult = await isSubconceptUnlocked(db, req.user.id, conceptId);
+        if (!gateResult.unlocked) {
+            return res.status(403).render('practice-locked.ejs', {
+                concept: conceptRes.rows[0],
+                reason: gateResult.reason,
+                unmetPrereqs: gateResult.unmetPrereqs,
+                user: req.user
+            });
+        }
+
         const storedMastery = parseFloat(masteryRes.rows[0]?.mastery || 0.2);
         const mastery = masteryRes.rows[0] ? applyDecay(storedMastery, masteryRes.rows[0].last_updated) : storedMastery;
         const decayedBy = Math.round((storedMastery - mastery) * 100);
@@ -2225,13 +2238,7 @@ app.get('/api/adaptive-questions/:conceptId', ensureAuthenticated, async (req, r
 // Initializes BKT weights for new students so they don't start from zero
 // ============================================================
 
-// Middleware to redirect new students to diagnostic
-function ensureDiagnostic(req, res, next) {
-    if (req.user && req.user.role === 'student' && !req.user.diagnostic_completed) {
-        return res.redirect('/diagnostic');
-    }
-    next();
-}
+// Diagnostic redirect is handled inline in GET / route above
 
 app.get('/diagnostic', ensureAuthenticated, async (req, res) => {
     // If already completed, go to dashboard
@@ -2330,7 +2337,52 @@ app.post('/diagnostic/answer', ensureAuthenticated, async (req, res) => {
         
         const question = diag.currentQuestion;
         const conceptId = diag.currentConceptId;
-        if (!question || !conceptId) return res.redirect('/diagnostic');
+        
+        // Handle no-question fallback: skip this concept and advance
+        if (!question || !conceptId || req.body.answer === 'skip') {
+            diag.questionIndex++;
+            if (diag.questionIndex >= diag.totalQuestions) {
+                await initializeRemainingConcepts(req.user.id, diag);
+                await db.query('UPDATE users SET diagnostic_completed = true WHERE id = $1', [req.user.id]);
+                req.user.diagnostic_completed = true;
+                const totalCorrect = diag.answers.filter(a => a.correct).length;
+                req.session.diagnosticResult = {
+                    totalQuestions: diag.answers.length,
+                    totalCorrect,
+                    percentage: Math.round((totalCorrect / Math.max(diag.answers.length, 1)) * 100)
+                };
+                delete req.session.diagnostic;
+                return res.redirect('/diagnostic/results');
+            }
+            // Try to find next concept with a question
+            let nextQuestion = null;
+            while (diag.questionIndex < diag.totalQuestions && !nextQuestion) {
+                const tryC = diag.sampledConcepts[diag.questionIndex];
+                nextQuestion = await getQuestionFromDB(tryC.conceptId, 'medium', [], req.user.id, req.user.institute_id);
+                if (!nextQuestion) {
+                    diag.questionIndex++;
+                } else {
+                    diag.currentQuestion = nextQuestion;
+                    diag.currentConceptId = tryC.conceptId;
+                    diag.currentConceptName = tryC.name;
+                }
+            }
+            if (!nextQuestion) {
+                await initializeRemainingConcepts(req.user.id, diag);
+                await db.query('UPDATE users SET diagnostic_completed = true WHERE id = $1', [req.user.id]);
+                req.user.diagnostic_completed = true;
+                const totalCorrect = diag.answers.filter(a => a.correct).length;
+                req.session.diagnosticResult = {
+                    totalQuestions: diag.answers.length,
+                    totalCorrect,
+                    percentage: Math.round((totalCorrect / Math.max(diag.answers.length, 1)) * 100)
+                };
+                delete req.session.diagnostic;
+                return res.redirect('/diagnostic/results');
+            }
+            req.session.diagnostic = diag;
+            return res.render('diagnostic.ejs', { diagnostic: diag, question: nextQuestion, user: req.user });
+        }
         
         const correct = req.body.answer === question.correct_answer;
         const difficultyTier = question.difficulty_tier || 2;
@@ -2354,24 +2406,13 @@ app.post('/diagnostic/answer', ensureAuthenticated, async (req, res) => {
             );
         }
         
-        // Update BKT mastery for this concept
-        const prev = await getUserConceptMastery(req.user.id, conceptId);
-        const updated = await bktUpdateConcept({
+        // BKT service handles mastery computation AND DB write via /update-concept
+        // Do NOT write mastery again here — bktUpdateConcept already does INSERT ... ON CONFLICT
+        await bktUpdateConcept({
             userId: req.user.id, skillId: conceptId,
-            correct, p_mastery: parseFloat(prev.mastery),
+            correct, p_mastery: parseFloat((await getUserConceptMastery(req.user.id, conceptId)).mastery),
             difficulty_tier: difficultyTier
         });
-        const newMastery = updated.posterior_mastery;
-        const newQA = prev.questions_answered + 1;
-        const newCA = prev.correct_answers + (correct ? 1 : 0);
-        
-        await db.query(`
-            INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
-            VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id, concept_id) DO UPDATE
-            SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
-            [req.user.id, conceptId, newMastery, newQA, newCA]
-        );
         
         // Move to next question
         diag.questionIndex++;
