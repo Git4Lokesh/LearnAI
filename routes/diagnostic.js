@@ -2,233 +2,424 @@ import express from 'express';
 import db from '../config/db.js';
 import { ensureAuthenticated } from '../middleware/auth.js';
 import { getUserConceptMastery } from '../helpers/mastery.js';
-import { getQuestionFromDB } from '../helpers/questions.js';
 import { bktUpdateConcept } from '../services/bktClient.js';
 
 const router = express.Router();
 
 // ============================================================
-// Diagnostic Onboarding Test — 30-question adaptive assessment
-// Initializes BKT weights for new students so they don't start from zero
+// JEE Mains Format Diagnostic Test — 90 MCQs, 3-hour timer
+// 30 Physics + 30 Chemistry + 30 Mathematics
+// +4 correct, −1 incorrect, 0 unattempted
 // ============================================================
 
-router.get('/diagnostic', ensureAuthenticated, async (req, res) => {
-    // If already completed, go to dashboard
-    if (req.user.diagnostic_completed) return res.redirect('/');
-    
-    // Initialize session state if not started
-    if (!req.session.diagnostic) {
-        req.session.diagnostic = {
-            questionIndex: 0,
-            totalQuestions: 30,
-            answers: [],           // { conceptId, correct, difficulty_tier }
-            sampledConcepts: [],   // concept IDs we've picked questions from
-            currentQuestion: null,
-            currentConceptId: null,
-            subjectIndex: 0,
-            started: false
-        };
+// --- Task 1.1: Question Selection Engine ---
+
+const SUBJECT_CONFIGS = [
+  { section: 'Physics',     filter: 'Physics',      seqOffset: 0  },
+  { section: 'Chemistry',   filter: 'Chemistry%',   seqOffset: 30 },
+  { section: 'Mathematics', filter: 'Mathematics',  seqOffset: 60 },
+];
+
+const TIER_TARGETS = [
+  { tier: 1, count: 7  },
+  { tier: 2, count: 13 },
+  { tier: 3, count: 10 },
+];
+
+// Adjacent tiers for fallback when a tier has insufficient questions
+const ADJACENT_TIERS = {
+  1: [2],
+  2: [1, 3],
+  3: [2],
+};
+
+async function selectDiagnosticQuestions() {
+  const allSelected = [];
+
+  for (const { section, filter, seqOffset } of SUBJECT_CONFIGS) {
+    const subjectQuestions = [];
+    const usedConceptIds = [];
+
+    for (const { tier, count } of TIER_TARGETS) {
+      // Primary query: 1 question per subconcept using ROW_NUMBER window function
+      const primary = await db.query(`
+        SELECT * FROM (
+          SELECT q.id, q.question_text, q.option1, q.option2, q.option3, q.option4,
+                 q.correct_answer, q.solution_text, q.concept_id, q.difficulty_tier,
+                 ROW_NUMBER() OVER (PARTITION BY q.concept_id ORDER BY RANDOM()) AS rn
+          FROM questions q
+          JOIN concepts c ON q.concept_id = c.id
+          WHERE q.status = 'approved'
+            AND q.difficulty_tier = $1
+            AND c.subject LIKE $2
+            AND q.concept_id NOT IN (SELECT UNNEST($3::text[]))
+        ) sub WHERE rn = 1
+        ORDER BY RANDOM()
+        LIMIT $4
+      `, [tier, filter, usedConceptIds.length > 0 ? usedConceptIds : ['__none__'], count]);
+
+      for (const row of primary.rows) {
+        subjectQuestions.push(row);
+        usedConceptIds.push(row.concept_id);
+      }
+
+      // Adjacent-tier fallback if we didn't get enough
+      let deficit = count - primary.rows.length;
+      if (deficit > 0) {
+        const adjacentTiers = ADJACENT_TIERS[tier];
+        for (const adjTier of adjacentTiers) {
+          if (deficit <= 0) break;
+          const fallback = await db.query(`
+            SELECT * FROM (
+              SELECT q.id, q.question_text, q.option1, q.option2, q.option3, q.option4,
+                     q.correct_answer, q.solution_text, q.concept_id, q.difficulty_tier,
+                     ROW_NUMBER() OVER (PARTITION BY q.concept_id ORDER BY RANDOM()) AS rn
+              FROM questions q
+              JOIN concepts c ON q.concept_id = c.id
+              WHERE q.status = 'approved'
+                AND q.difficulty_tier = $1
+                AND c.subject LIKE $2
+                AND q.concept_id NOT IN (SELECT UNNEST($3::text[]))
+            ) sub WHERE rn = 1
+            ORDER BY RANDOM()
+            LIMIT $4
+          `, [adjTier, filter, usedConceptIds.length > 0 ? usedConceptIds : ['__none__'], deficit]);
+
+          for (const row of fallback.rows) {
+            subjectQuestions.push(row);
+            usedConceptIds.push(row.concept_id);
+          }
+          deficit -= fallback.rows.length;
+        }
+      }
+
+      // If still short after adjacency fill, allow duplicate subconcepts
+      if (deficit > 0) {
+        const alreadySelectedIds = subjectQuestions.map(q => q.id);
+        const dupFill = await db.query(`
+          SELECT q.id, q.question_text, q.option1, q.option2, q.option3, q.option4,
+                 q.correct_answer, q.solution_text, q.concept_id, q.difficulty_tier
+          FROM questions q
+          JOIN concepts c ON q.concept_id = c.id
+          WHERE q.status = 'approved'
+            AND c.subject LIKE $1
+            AND q.id != ALL($2::int[])
+          ORDER BY RANDOM()
+          LIMIT $3
+        `, [filter, alreadySelectedIds.length > 0 ? alreadySelectedIds : [0], deficit]);
+
+        for (const row of dupFill.rows) {
+          subjectQuestions.push(row);
+        }
+      }
     }
-    
-    res.render('diagnostic.ejs', {
-        diagnostic: req.session.diagnostic,
-        question: req.session.diagnostic.currentQuestion,
-        user: req.user
+
+    // Assign sequence numbers for this subject
+    subjectQuestions.forEach((q, i) => {
+      allSelected.push({
+        id: q.id,
+        question_text: q.question_text,
+        option1: q.option1,
+        option2: q.option2,
+        option3: q.option3,
+        option4: q.option4,
+        correct_answer: q.correct_answer,
+        solution_text: q.solution_text,
+        concept_id: q.concept_id,
+        difficulty_tier: q.difficulty_tier,
+        seq: seqOffset + i + 1,
+        section,
+      });
     });
+  }
+
+  return allSelected;
+}
+
+// --- Task 1.5: Scoring Engine ---
+
+function computeScore(questions, answers) {
+  let total = 0, correct = 0, incorrect = 0, unattempted = 0;
+  const sections = {
+    Physics:     { score: 0, correct: 0, incorrect: 0, unattempted: 0 },
+    Chemistry:   { score: 0, correct: 0, incorrect: 0, unattempted: 0 },
+    Mathematics: { score: 0, correct: 0, incorrect: 0, unattempted: 0 },
+  };
+
+  for (const q of questions) {
+    const studentAnswer = answers[String(q.seq)];
+    const sec = sections[q.section];
+
+    if (!studentAnswer) {
+      unattempted++;
+      sec.unattempted++;
+    } else if (studentAnswer === q.correct_answer) {
+      total += 4;
+      correct++;
+      sec.score += 4;
+      sec.correct++;
+    } else {
+      total -= 1;
+      incorrect++;
+      sec.score -= 1;
+      sec.incorrect++;
+    }
+  }
+
+  return { total, correct, incorrect, unattempted, maxScore: 360, sections };
+}
+
+// --- Helper: sanitize questions for client (strip correct_answer, solution_text) ---
+
+function sanitizeQuestions(questions) {
+  return questions.map(q => ({
+    seq: q.seq,
+    section: q.section,
+    id: q.id,
+    question_text: q.question_text,
+    option1: q.option1,
+    option2: q.option2,
+    option3: q.option3,
+    option4: q.option4,
+    difficulty_tier: q.difficulty_tier,
+  }));
+}
+
+// --- Helper: auto-submit logic (shared by GET expiry check and POST submit) ---
+
+async function performSubmission(req) {
+  const userId = req.user.id;
+  const diag = req.session.diagnostic;
+  const { questions, answers } = diag;
+
+  // Score
+  const result = computeScore(questions, answers);
+
+  // BKT update for each answered question (wrapped in try/catch)
+  for (const q of questions) {
+    const studentAnswer = answers[String(q.seq)];
+    if (!studentAnswer) continue;
+
+    const isCorrect = studentAnswer === q.correct_answer;
+
+    try {
+      const prev = await getUserConceptMastery(userId, q.concept_id);
+      const updated = await bktUpdateConcept({
+        userId,
+        skillId: q.concept_id,
+        correct: isCorrect,
+        p_mastery: parseFloat(prev.mastery),
+        difficulty_tier: q.difficulty_tier,
+      });
+      const newMastery = updated.posterior_mastery;
+      const newQA = prev.questions_answered + 1;
+      const newCA = prev.correct_answers + (isCorrect ? 1 : 0);
+
+      await db.query(`
+        INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
+        VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, concept_id) DO UPDATE
+        SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
+        [userId, q.concept_id, newMastery, newQA, newCA]
+      );
+    } catch (bktErr) {
+      console.error('BKT update failed for concept', q.concept_id, bktErr.message);
+    }
+  }
+
+  // Log answered questions to user_question_attempts
+  for (const q of questions) {
+    const studentAnswer = answers[String(q.seq)];
+    if (!studentAnswer) continue;
+    const isCorrect = studentAnswer === q.correct_answer;
+    try {
+      await db.query(
+        'INSERT INTO user_question_attempts (user_id, question_id, correct, time_taken_seconds) VALUES ($1,$2,$3,$4)',
+        [userId, q.id, isCorrect, null]
+      );
+    } catch (logErr) {
+      console.error('Failed to log attempt for question', q.id, logErr.message);
+    }
+  }
+
+  // Build diagData compatible with initializeRemainingConcepts
+  const diagData = {
+    answers: questions
+      .filter(q => answers[String(q.seq)])
+      .map(q => ({
+        conceptId: q.concept_id,
+        correct: answers[String(q.seq)] === q.correct_answer,
+        difficultyTier: q.difficulty_tier,
+      })),
+    sampledConcepts: questions.map(q => ({
+      conceptId: q.concept_id,
+      subject: q.section, // initializeRemainingConcepts uses DB subject values via allConcepts query
+    })),
+  };
+
+  // Initialize remaining concepts
+  await initializeRemainingConcepts(userId, diagData);
+
+  // Mark diagnostic completed
+  await db.query('UPDATE users SET diagnostic_completed = true WHERE id = $1', [userId]);
+  req.user.diagnostic_completed = true;
+
+  // Store result in session
+  req.session.diagnosticResult = {
+    totalScore: result.total,
+    maxScore: result.maxScore,
+    correct: result.correct,
+    incorrect: result.incorrect,
+    unattempted: result.unattempted,
+    sections: result.sections,
+  };
+
+  // Clean up diagnostic session
+  delete req.session.diagnostic;
+
+  return result;
+}
+
+// --- Task 1.2: GET /diagnostic ---
+
+router.get('/diagnostic', ensureAuthenticated, async (req, res) => {
+  try {
+    if (req.user.diagnostic_completed) return res.redirect('/');
+
+    if (req.session.diagnostic?.started) {
+      const { startTimestamp, durationMs } = req.session.diagnostic;
+
+      // Check time expiry — auto-submit if expired
+      if (Date.now() - startTimestamp >= durationMs) {
+        await performSubmission(req);
+        return res.redirect('/diagnostic/results');
+      }
+
+      // Resume: render test UI with sanitized questions
+      const sanitizedQuestions = sanitizeQuestions(req.session.diagnostic.questions);
+      return res.render('diagnostic.ejs', {
+        diagnostic: {
+          started: true,
+          startTimestamp,
+          durationMs,
+          answers: req.session.diagnostic.answers,
+          markedForReview: req.session.diagnostic.markedForReview,
+        },
+        questions: sanitizedQuestions,
+        user: req.user,
+      });
+    }
+
+    // Not started — render welcome screen
+    res.render('diagnostic.ejs', {
+      diagnostic: { started: false },
+      questions: [],
+      user: req.user,
+    });
+  } catch (e) {
+    console.error('GET /diagnostic error:', e);
+    res.status(500).send('Failed to load diagnostic test');
+  }
 });
+
+// --- Task 1.3: POST /diagnostic/start ---
 
 router.post('/diagnostic/start', ensureAuthenticated, async (req, res) => {
-    try {
-        if (req.user.diagnostic_completed) return res.redirect('/');
-        
-        // ── Improved sampling: 2 concepts per chapter, ~45 questions total ──
-        // This gives us 2 data points per chapter for more reliable inference
-        const subjects = ['Physics', 'Mathematics'];
-        const chemRes = await db.query("SELECT DISTINCT subject FROM concepts WHERE subject ILIKE 'chemistry%'");
-        const chemSubjects = chemRes.rows.map(r => r.subject);
-        const allSubjects = [...subjects, ...chemSubjects];
-        
-        // Target: ~9 questions per subject (45 total across 5 subjects)
-        // Pick up to 2 concepts per chapter
-        let sampledConcepts = [];
-        
-        for (const subject of allSubjects) {
-            const chaptersRes = await db.query(`
-                SELECT chapter_id, concept_id, name FROM (
-                    SELECT c.chapter_id, c.id as concept_id, c.name,
-                           ROW_NUMBER() OVER (PARTITION BY c.chapter_id ORDER BY RANDOM()) as rn
-                    FROM concepts c
-                    WHERE c.subject = $1 AND c.chapter_id IS NOT NULL
-                ) sub WHERE rn <= 2
-                ORDER BY chapter_id, rn
-            `, [subject]);
-            
-            for (const row of chaptersRes.rows) {
-                sampledConcepts.push({ conceptId: row.concept_id, name: row.name, subject, chapterId: row.chapter_id });
-            }
-        }
-        
-        // Shuffle and trim to 45
-        sampledConcepts.sort(() => Math.random() - 0.5);
-        sampledConcepts = sampledConcepts.slice(0, 45);
-        
-        // Fetch first question (start at tier 2 — medium difficulty)
-        const firstConcept = sampledConcepts[0];
-        const question = await getQuestionFromDB(firstConcept.conceptId, 'medium', [], req.user.id, req.user.institute_id);
-        
-        req.session.diagnostic = {
-            questionIndex: 0,
-            totalQuestions: sampledConcepts.length,
-            answers: [],
-            sampledConcepts,
-            currentQuestion: question,
-            currentConceptId: firstConcept.conceptId,
-            currentConceptName: firstConcept.name,
-            started: true,
-            subjectCorrect: {},
-            subjectTotal: {}
-        };
-        
-        res.render('diagnostic.ejs', {
-            diagnostic: req.session.diagnostic,
-            question,
-            user: req.user
-        });
-    } catch (e) {
-        console.error('Diagnostic start error:', e);
-        res.status(500).send('Failed to start diagnostic test');
+  try {
+    if (req.user.diagnostic_completed) return res.redirect('/');
+
+    const questions = await selectDiagnosticQuestions();
+
+    if (questions.length === 0) {
+      return res.status(500).send('No questions available for the diagnostic test');
     }
+
+    req.session.diagnostic = {
+      started: true,
+      startTimestamp: Date.now(),
+      durationMs: 10800000, // 3 hours
+      questions,
+      answers: {},
+      markedForReview: {},
+    };
+
+    return res.redirect('/diagnostic');
+  } catch (e) {
+    console.error('POST /diagnostic/start error:', e);
+    res.status(500).send('Failed to start diagnostic test');
+  }
 });
 
-router.post('/diagnostic/answer', ensureAuthenticated, async (req, res) => {
-    try {
-        if (req.user.diagnostic_completed) return res.redirect('/');
-        
-        const diag = req.session.diagnostic;
-        if (!diag || !diag.started) return res.redirect('/diagnostic');
-        
-        const question = diag.currentQuestion;
-        const conceptId = diag.currentConceptId;
-        if (!question || !conceptId) return res.redirect('/diagnostic');
-        
-        const correct = req.body.answer === question.correct_answer;
-        const difficultyTier = question.difficulty_tier || 2;
-        
-        // Record the answer
-        diag.answers.push({ conceptId, correct, difficultyTier });
-        
-        // Track per-subject performance
-        const concept = diag.sampledConcepts[diag.questionIndex];
-        if (concept) {
-            const subj = concept.subject;
-            diag.subjectCorrect[subj] = (diag.subjectCorrect[subj] || 0) + (correct ? 1 : 0);
-            diag.subjectTotal[subj] = (diag.subjectTotal[subj] || 0) + 1;
-        }
-        
-        // Log the attempt
-        if (question.id) {
-            await db.query(
-                'INSERT INTO user_question_attempts (user_id, question_id, correct, time_taken_seconds) VALUES ($1,$2,$3,$4)',
-                [req.user.id, question.id, correct, null]
-            );
-        }
-        
-        // Update BKT mastery for this concept
-        const prev = await getUserConceptMastery(req.user.id, conceptId);
-        const updated = await bktUpdateConcept({
-            userId: req.user.id, skillId: conceptId,
-            correct, p_mastery: parseFloat(prev.mastery),
-            difficulty_tier: difficultyTier
-        });
-        const newMastery = updated.posterior_mastery;
-        const newQA = prev.questions_answered + 1;
-        const newCA = prev.correct_answers + (correct ? 1 : 0);
-        
-        await db.query(`
-            INSERT INTO user_concept_mastery (user_id, concept_id, mastery, questions_answered, correct_answers, last_updated)
-            VALUES ($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id, concept_id) DO UPDATE
-            SET mastery=$3, questions_answered=$4, correct_answers=$5, last_updated=CURRENT_TIMESTAMP`,
-            [req.user.id, conceptId, newMastery, newQA, newCA]
-        );
-        
-        // Move to next question
-        diag.questionIndex++;
-        
-        if (diag.questionIndex >= diag.totalQuestions) {
-            // Diagnostic complete — initialize remaining concepts
-            await initializeRemainingConcepts(req.user.id, diag);
-            
-            // Mark diagnostic as completed
-            await db.query('UPDATE users SET diagnostic_completed = true WHERE id = $1', [req.user.id]);
-            req.user.diagnostic_completed = true;
-            
-            // Calculate summary stats
-            const totalCorrect = diag.answers.filter(a => a.correct).length;
-            
-            req.session.diagnosticResult = {
-                totalQuestions: diag.totalQuestions,
-                totalCorrect,
-                percentage: Math.round((totalCorrect / diag.totalQuestions) * 100)
-            };
-            
-            delete req.session.diagnostic;
-            return res.redirect('/diagnostic/results');
-        }
-        
-        // Fetch next question with adaptive difficulty
-        const nextConcept = diag.sampledConcepts[diag.questionIndex];
-        const subjectAccuracy = diag.subjectTotal[nextConcept.subject] > 0
-            ? diag.subjectCorrect[nextConcept.subject] / diag.subjectTotal[nextConcept.subject]
-            : 0.5;
-        
-        // Adapt difficulty based on subject performance
-        let difficulty = 'medium';
-        if (subjectAccuracy >= 0.7) difficulty = 'hard';
-        else if (subjectAccuracy < 0.4) difficulty = 'easy';
-        
-        // Find next concept that has available questions
-        let nextQuestion = null;
-        while (diag.questionIndex < diag.totalQuestions && !nextQuestion) {
-            const tryC = diag.sampledConcepts[diag.questionIndex];
-            nextQuestion = await getQuestionFromDB(tryC.conceptId, difficulty, [], req.user.id, req.user.institute_id);
-            if (!nextQuestion) {
-                diag.questionIndex++;
-            } else {
-                diag.currentQuestion = nextQuestion;
-                diag.currentConceptId = tryC.conceptId;
-                diag.currentConceptName = tryC.name;
-            }
-        }
-        
-        // If we ran out of concepts with questions, finish early
-        if (!nextQuestion) {
-            await initializeRemainingConcepts(req.user.id, diag);
-            await db.query('UPDATE users SET diagnostic_completed = true WHERE id = $1', [req.user.id]);
-            req.user.diagnostic_completed = true;
-            const totalCorrect = diag.answers.filter(a => a.correct).length;
-            req.session.diagnosticResult = {
-                totalQuestions: diag.answers.length,
-                totalCorrect,
-                percentage: Math.round((totalCorrect / Math.max(diag.answers.length, 1)) * 100)
-            };
-            delete req.session.diagnostic;
-            return res.redirect('/diagnostic/results');
-        }
-        diag.lastAnswer = { correct, conceptName: concept?.name || conceptId };
-        
-        req.session.diagnostic = diag;
-        
-        res.render('diagnostic.ejs', {
-            diagnostic: diag,
-            question: nextQuestion,
-            user: req.user
-        });
-    } catch (e) {
-        console.error('Diagnostic answer error:', e);
-        res.status(500).send('Failed to process diagnostic answer');
-    }
+// --- Task 1.4: POST /diagnostic/answer, /clear, /mark-review ---
+
+router.post('/diagnostic/answer', ensureAuthenticated, (req, res) => {
+  const diag = req.session.diagnostic;
+  if (!diag?.started) return res.status(400).json({ ok: false, error: 'No test in progress' });
+
+  const { seq, answer } = req.body;
+  const seqNum = Number(seq);
+
+  if (!Number.isInteger(seqNum) || seqNum < 1 || seqNum > 90) {
+    return res.status(400).json({ ok: false, error: 'Invalid sequence number' });
+  }
+  if (!['option1', 'option2', 'option3', 'option4'].includes(answer)) {
+    return res.status(400).json({ ok: false, error: 'Invalid answer option' });
+  }
+
+  diag.answers[String(seqNum)] = answer;
+  return res.json({ ok: true });
 });
+
+router.post('/diagnostic/clear', ensureAuthenticated, (req, res) => {
+  const diag = req.session.diagnostic;
+  if (!diag?.started) return res.status(400).json({ ok: false, error: 'No test in progress' });
+
+  const { seq } = req.body;
+  const seqNum = Number(seq);
+
+  if (!Number.isInteger(seqNum) || seqNum < 1 || seqNum > 90) {
+    return res.status(400).json({ ok: false, error: 'Invalid sequence number' });
+  }
+
+  delete diag.answers[String(seqNum)];
+  return res.json({ ok: true });
+});
+
+router.post('/diagnostic/mark-review', ensureAuthenticated, (req, res) => {
+  const diag = req.session.diagnostic;
+  if (!diag?.started) return res.status(400).json({ ok: false, error: 'No test in progress' });
+
+  const { seq, marked } = req.body;
+  const seqNum = Number(seq);
+
+  if (!Number.isInteger(seqNum) || seqNum < 1 || seqNum > 90) {
+    return res.status(400).json({ ok: false, error: 'Invalid sequence number' });
+  }
+
+  if (marked) {
+    diag.markedForReview[String(seqNum)] = true;
+  } else {
+    delete diag.markedForReview[String(seqNum)];
+  }
+  return res.json({ ok: true });
+});
+
+// --- Task 1.5: POST /diagnostic/submit ---
+
+router.post('/diagnostic/submit', ensureAuthenticated, async (req, res) => {
+  try {
+    const diag = req.session.diagnostic;
+    if (!diag?.started) return res.status(400).json({ ok: false, error: 'No test in progress' });
+
+    await performSubmission(req);
+    return res.json({ ok: true, redirect: '/diagnostic/results' });
+  } catch (e) {
+    console.error('POST /diagnostic/submit error:', e);
+    res.status(500).json({ ok: false, error: 'Failed to submit diagnostic test' });
+  }
+});
+
+// --- Task 1.6: Preserved initializeRemainingConcepts (verbatim from original) ---
 
 // Initialize mastery for concepts not directly tested in the diagnostic
 async function initializeRemainingConcepts(userId, diag) {
@@ -409,6 +600,8 @@ async function initializeRemainingConcepts(userId, diag) {
     }
 }
 
+// --- Task 1.7: GET /diagnostic/results and GET /diagnostic/skip ---
+
 router.get('/diagnostic/results', ensureAuthenticated, async (req, res) => {
     const result = req.session.diagnosticResult;
     if (!result) return res.redirect('/');
@@ -422,8 +615,6 @@ router.get('/diagnostic/results', ensureAuthenticated, async (req, res) => {
     const strong = masteryRes.rows.filter(r => parseFloat(r.mastery) >= 0.4).length;
     const developing = masteryRes.rows.filter(r => parseFloat(r.mastery) >= 0.25 && parseFloat(r.mastery) < 0.4).length;
     const needsWork = masteryRes.rows.filter(r => parseFloat(r.mastery) < 0.25).length;
-    
-    delete req.session.diagnosticResult;
     
     res.render('diagnostic-results.ejs', {
         result,

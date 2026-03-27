@@ -20,15 +20,20 @@ router.get('/practice/:conceptId', ensureAuthenticated, async (req, res) => {
         ]);
         if (!conceptRes.rows[0]) return res.status(404).send('Concept not found');
 
-        // Prerequisite gating check
-        const gateResult = await isSubconceptUnlocked(db, req.user.id, conceptId);
-        if (!gateResult.unlocked) {
-            return res.status(403).render('practice-locked.ejs', {
-                concept: conceptRes.rows[0],
-                reason: gateResult.reason,
-                unmetPrereqs: gateResult.unmetPrereqs,
-                user: req.user
-            });
+        // Prerequisite gating check — only enforced if the institute has it enabled
+        if (req.user.institute_id) {
+            const instRes = await db.query('SELECT prerequisite_gating_enabled FROM institutes WHERE id=$1', [req.user.institute_id]);
+            if (instRes.rows[0]?.prerequisite_gating_enabled) {
+                const gateResult = await isSubconceptUnlocked(db, req.user.id, conceptId);
+                if (!gateResult.unlocked) {
+                    return res.status(403).render('practice-locked.ejs', {
+                        concept: conceptRes.rows[0],
+                        reason: gateResult.reason,
+                        unmetPrereqs: gateResult.unmetPrereqs,
+                        user: req.user
+                    });
+                }
+            }
         }
 
         const storedMastery = parseFloat(masteryRes.rows[0]?.mastery || 0.2);
