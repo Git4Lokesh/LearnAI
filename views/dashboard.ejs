@@ -1374,64 +1374,94 @@ function renderSignalLegend() {
 
 async function diagnoseConcept() {
     if (!selectedConcept || diagnosisRunning) return;
-
     diagnosisRunning = true;
     const btn = document.getElementById('btnDiagnose');
     btn.disabled = true;
-    btn.textContent = '🔍 Analyzing...';
-
-    document.getElementById('diagBody').innerHTML = '<div style="padding:2rem;text-align:center"><div class="loading-spinner"></div><div style="color:var(--text-muted);font-size:0.85rem;margin-top:12px;font-style:italic">AI is analyzing your prerequisites...</div><div style="height:4px;border-radius:2px;margin-top:12px;background:linear-gradient(90deg,var(--purple),var(--gold),var(--purple));background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite"></div></div>';
+    btn.textContent = '\u{1F50D} Analyzing...';
+    document.getElementById('diagBody').innerHTML = '<div style="padding:2rem;text-align:center"><div class="loading-spinner"></div><div style="color:var(--text-muted);font-size:0.85rem;margin-top:12px">Analyzing prerequisites...</div></div>';
     openDiagnosis();
-
     try {
-        const response = await fetch('/api/ai/diagnose', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ conceptId: selectedConcept })
-        });
-
-        if (response.status === 429) {
-            document.getElementById('diagBody').innerHTML = '<div style="padding:2rem;text-align:center;color:var(--gold)"><i class="bi bi-hourglass-split" style="font-size:2rem;display:block;margin-bottom:8px"></i>Daily AI limit reached. Try again tomorrow!</div>';
-            return;
+        const [metricsRes, aiRes] = await Promise.all([
+            fetch('/api/diagnose-concept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conceptId: selectedConcept }) }),
+            fetch('/api/ai/diagnose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conceptId: selectedConcept }) }).catch(() => null)
+        ]);
+        if (!metricsRes.ok) throw new Error('Diagnosis failed');
+        const data = await metricsRes.json();
+        const aiData = aiRes && aiRes.ok ? await aiRes.json() : null;
+        let html = '';
+        const tColor = data.target.mastery >= 80 ? 'var(--green)' : data.target.mastery >= 50 ? 'var(--gold)' : 'var(--red)';
+        html += `<div style="text-align:center;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="font-size:1.1rem;font-weight:700;color:var(--text)">${data.target.name}</div>
+            <div style="font-size:0.8rem;color:var(--muted);margin-top:4px">Mastery: <span style="color:${tColor};font-weight:700;font-size:1rem">${data.target.mastery}%</span></div>
+            <div style="display:flex;justify-content:center;gap:1.5rem;margin-top:10px">
+                <div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--text)">${data.totalPrereqs}</div><div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Prerequisites</div></div>
+                <div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:var(--purple-light)">~${data.estimatedEffort || 0}</div><div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Questions to ready</div></div>
+                <div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:${data.overallReadiness >= 80 ? 'var(--green)' : data.overallReadiness >= 50 ? 'var(--gold)' : 'var(--red)'}">${data.overallReadiness}%</div><div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Readiness</div></div>
+            </div></div>`;
+        if (data.totalPrereqs > 0) {
+            const s = data.summary;
+            const segments = [
+                { count: s.rootCauses, color: '#EF4444', label: 'Root cause' },
+                { count: s.critical, color: '#F59E0B', label: 'Critical' },
+                { count: s.stale || 0, color: '#A855F7', label: 'Stale' },
+                { count: s.weak, color: '#22D3EE', label: 'Weak' },
+                { count: s.mastered, color: '#10B981', label: 'Mastered' }
+            ].filter(seg => seg.count > 0);
+            html += `<div style="padding:12px 0">
+                <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px">
+                    ${segments.map(seg => `<div style="flex:${seg.count};background:${seg.color};min-width:4px" title="${seg.label}: ${seg.count}"></div>`).join('')}
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;justify-content:center">
+                    ${segments.map(seg => `<span style="font-size:0.65rem;color:var(--muted);display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${seg.color}"></span>${seg.count} ${seg.label}</span>`).join('')}
+                </div></div>`;
         }
-
-        if (!response.ok) throw new Error('Diagnosis failed');
-        const data = await response.json();
-
-        // Render AI explanation with markdown
-        const diagBody = document.getElementById('diagBody');
-        diagBody.innerHTML = '<div id="aiDiagContent" style="padding:4px"></div>';
-        const container = document.getElementById('aiDiagContent');
-
-        // Typing animation with markdown
-        const fullText = data.explanation || 'Could not generate diagnosis.';
-        let index = 0;
-        const charsPerFrame = 15;
-        function typeFrame() {
-            if (index < fullText.length) {
-                index = Math.min(index + charsPerFrame, fullText.length);
-                container.innerHTML = marked.parse(fullText.substring(0, index));
-                requestAnimationFrame(typeFrame);
-            } else {
-                container.innerHTML = marked.parse(fullText);
-                if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([container]);
-                // Add clickable study path links if available
-                if (data.studyPath && data.studyPath.length > 0) {
-                    const pathHtml = data.studyPath.map(s =>
-                        `<a href="/practice/${s.id || s.concept_id}" style="display:inline-block;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);border-radius:6px;padding:3px 10px;margin:3px;font-size:0.75rem;color:var(--purple-light);text-decoration:none;transition:all 0.2s" onmouseover="this.style.background='rgba(124,58,237,0.25)'" onmouseout="this.style.background='rgba(124,58,237,0.15)'">${s.name} (${Math.round((s.mastery || 0) * 100)}%)</a>`
-                    ).join('');
-                    container.innerHTML += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📍 Study Path</div>${pathHtml}</div>`;
+        if (data.totalPrereqs === 0) {
+            html += `<div style="text-align:center;padding:1rem 0"><span style="font-size:1.2rem">&#x2705;</span> <span style="color:var(--green);font-weight:600">No prerequisites</span></div>`;
+        }
+        if (data.totalPrereqs > 0 && (data.summary.rootCauses + data.summary.critical + (data.summary.stale||0) + data.summary.weak) === 0) {
+            html += `<div style="text-align:center;padding:1rem 0"><span style="font-size:1.2rem">&#x2705;</span> <span style="color:var(--green);font-weight:600">All prerequisites mastered</span></div>`;
+        }
+        if (data.suggestedPath && data.suggestedPath.length > 0) {
+            html += `<div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;margin-top:4px">
+                <div style="font-size:0.72rem;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">\u{1F4CD} Study Path</div>`;
+            data.suggestedPath.forEach((s, i) => {
+                const sColor = s.mastery >= 50 ? 'var(--gold)' : 'var(--red-light)';
+                html += `<div onclick="diagNodeClick('${s.id}')" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px;cursor:pointer;transition:all 0.2s">
+                    <div style="width:20px;height:20px;border-radius:50%;background:var(--gradient-purple);display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;flex-shrink:0">${i+1}</div>
+                    <div style="flex:1;font-size:0.82rem;color:var(--text)">${s.name}</div>
+                    <div style="font-size:0.82rem;font-weight:700;color:${sColor}">${s.mastery}%</div>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+        html += `<div style="border-top:1px solid rgba(124,58,237,0.2);padding-top:12px;margin-top:12px">
+            <div style="font-size:0.72rem;font-weight:600;color:var(--purple-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">\u{1F916} AI Analysis</div>
+            <div id="aiAdviceContent" style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6"></div>
+        </div>`;
+        document.getElementById('diagBody').innerHTML = html;
+        const aiContainer = document.getElementById('aiAdviceContent');
+        if (aiData && aiData.explanation) {
+            const text = aiData.explanation;
+            let idx = 0;
+            function typeAi() {
+                if (idx < text.length) {
+                    idx = Math.min(idx + 15, text.length);
+                    aiContainer.innerHTML = marked.parse(text.substring(0, idx));
+                    requestAnimationFrame(typeAi);
+                } else {
+                    aiContainer.innerHTML = marked.parse(text);
                 }
             }
+            requestAnimationFrame(typeAi);
+        } else {
+            aiContainer.innerHTML = '<span style="color:var(--text-muted);font-style:italic">AI analysis unavailable.</span>';
         }
-        requestAnimationFrame(typeFrame);
-
     } catch (error) {
-        document.getElementById('diagBody').innerHTML = `<div style="padding:2rem;text-align:center;color:var(--red)"><i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:8px"></i>${error.message}</div>`;
+        document.getElementById('diagBody').innerHTML = `<div style="padding:2rem;text-align:center;color:var(--red)"><i class="bi bi-exclamation-triangle"></i> ${error.message}</div>`;
     } finally {
         diagnosisRunning = false;
         btn.disabled = false;
-        btn.textContent = '🔍 Diagnose Prerequisites';
+        btn.textContent = '\u{1F50D} Diagnose Prerequisites';
     }
 }
 

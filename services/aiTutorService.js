@@ -11,23 +11,19 @@ const MODEL = 'gemini-2.5-flash';
 // ── Prompt Builders ──
 
 function buildHintSystemPrompt() {
-    return `You are a patient, encouraging JEE tutor helping an Indian student preparing for JEE Mains/Advanced.
+    return `You are a patient JEE tutor. The student is looking at a question and wants a hint to help them think through it.
 
-The student answered a question incorrectly. Your job:
-1. Acknowledge their attempt without being condescending
-2. Explain WHY their selected answer is wrong — what misconception or error led to it
-3. Give a conceptual nudge toward the correct reasoning WITHOUT directly stating the correct answer
-4. If the student has weak prerequisites listed below, connect the hint to those gaps
-5. Use simple language. If math is needed, use LaTeX with $...$ for inline and $$...$$ for display
-
-Keep the hint concise (3-5 paragraphs max). Use markdown formatting.
-Do NOT reveal the correct answer directly. Guide them to figure it out.`;
+Your job:
+1. Give a conceptual nudge that helps them approach the problem — what formula, principle, or technique applies
+2. Do NOT give the answer or work through the full solution
+3. If they have weak prerequisites, mention which foundational concept they should review
+4. Keep it to 2-3 short paragraphs max
+5. Use $...$ for inline math, $$...$$ for display math
+6. Sound like a helpful senior student, not a textbook`;
 }
 
 function buildHintUserPrompt(params) {
     const optionMap = { option1: 'A', option2: 'B', option3: 'C', option4: 'D' };
-    const selectedLetter = optionMap[params.selectedAnswer] || '?';
-    const correctLetter = optionMap[params.correctAnswer] || '?';
 
     let prereqSection = 'None — all prerequisites are strong.';
     if (params.weakPrereqs && params.weakPrereqs.length > 0) {
@@ -36,7 +32,11 @@ function buildHintUserPrompt(params) {
         ).join('\n');
     }
 
-    return `**Question:** ${params.questionText}
+    // If selectedAnswer is provided, this is "advice" mode (wrong answer specific)
+    if (params.selectedAnswer && params.correctAnswer && params.selectedAnswer !== params.correctAnswer) {
+        const selectedLetter = optionMap[params.selectedAnswer] || '?';
+        const correctLetter = optionMap[params.correctAnswer] || '?';
+        return `**Question:** ${params.questionText}
 
 **Options:**
 A) ${params.option1}
@@ -47,11 +47,29 @@ D) ${params.option4}
 **Student selected:** ${selectedLetter}) ${params[params.selectedAnswer]} (WRONG)
 **Correct answer:** ${correctLetter}) ${params[params.correctAnswer]}
 
-**Concept:** ${params.conceptName}
-**Student's mastery on this concept:** ${params.masteryPct}%
+**Concept:** ${params.conceptName} (${params.masteryPct}% mastery)
 
-**Weak prerequisites (mastery < 70%):**
-${prereqSection}`;
+**Weak prerequisites:**
+${prereqSection}
+
+Explain why their answer is wrong and guide them toward the correct reasoning. Be specific about the misconception.`;
+    }
+
+    // Hint mode — no wrong answer, just help with the question
+    return `**Question:** ${params.questionText}
+
+**Options:**
+A) ${params.option1}
+B) ${params.option2}
+C) ${params.option3}
+D) ${params.option4}
+
+**Concept:** ${params.conceptName} (${params.masteryPct}% mastery)
+
+**Weak prerequisites:**
+${prereqSection}
+
+Give a hint to help approach this problem. What concept or technique should they think about?`;
 }
 
 function buildDiagnosisSystemPrompt() {

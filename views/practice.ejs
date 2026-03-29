@@ -139,6 +139,11 @@
             .actions { flex-direction: column; }
             .summary-stats { flex-direction: column; gap: 1rem; }
         }
+        /* AI Tutor Section */
+        .ai-tutor-section { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.15); border-radius: 14px; padding: 14px 16px; margin-bottom: 1rem; backdrop-filter: blur(12px); }
+        .ai-tutor-header { font-size: 0.75rem; font-weight: 600; color: var(--purple-light); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+        .ai-tutor-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
         /* AI Panels */
         .ai-panel { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.2); border-radius: 12px; margin-top: 1rem; overflow: hidden; backdrop-filter: blur(12px); }
         .ai-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(124,58,237,0.08); border-bottom: 1px solid rgba(124,58,237,0.15); font-size: 0.85rem; font-weight: 600; color: var(--purple-light); }
@@ -149,6 +154,8 @@
         .ai-panel-body a { color: var(--gold); }
         .btn-ai { background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.3); color: var(--purple-light); border-radius: 8px; padding: 6px 14px; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
         .btn-ai:hover { background: rgba(124,58,237,0.25); border-color: var(--purple); transform: translateY(-1px); }
+        .btn-ai-advice { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: var(--red-light); }
+        .btn-ai-advice:hover { background: rgba(239,68,68,0.25); border-color: var(--red); }
         .ai-loader { padding: 1rem; }
         .ai-loader-text { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; font-style: italic; }
         .ai-loader-bar { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--purple), var(--gold), var(--purple)); background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite; }
@@ -314,13 +321,19 @@ function renderQuestion() {
                 <span id="feedbackMsg"></span>
                 <div class="solution-text" id="solutionText"></div>
             </div>
-            <div id="aiActionsBar" style="display:none;margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn-ai" id="btnAiHint" onclick="fetchAiHint(questions[currentIdx])" style="display:none"><i class="bi bi-lightbulb"></i> Get AI Hint</button>
-                <button class="btn-ai" id="btnAiDiagnose" onclick="fetchAiDiagnosis()"><i class="bi bi-search"></i> Why am I stuck?</button>
+            <div class="stagnation-warning" id="stagnationWarn"></div>
+        </div>
+        <div class="ai-tutor-section">
+            <div class="ai-tutor-header"><i class="bi bi-robot"></i> AI Tutor</div>
+            <div class="ai-tutor-buttons">
+                <button class="btn-ai" id="btnAiHint" onclick="fetchAiHint(questions[currentIdx])"><i class="bi bi-lightbulb"></i> Hint</button>
+                <button class="btn-ai btn-ai-advice" id="btnAiAdvice" onclick="fetchAiAdvice()" style="display:none"><i class="bi bi-chat-dots"></i> Advice</button>
+                <button class="btn-ai" id="btnAiDiagnose" onclick="fetchAiDiagnosis()"><i class="bi bi-search"></i> Diagnose</button>
+                <button class="btn-ai" onclick="document.getElementById('chatWidgetPanel').classList.add('open')"><i class="bi bi-chat-left-text"></i> Chat</button>
             </div>
             <div id="aiHintPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div></div>
+            <div id="aiAdvicePanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-chat-dots"></i> AI Advice</span></div><div class="ai-panel-body" id="aiAdviceContent"></div></div>
             <div id="aiDiagnosisPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-search"></i> AI Diagnosis</span></div><div class="ai-panel-body" id="aiDiagnosisContent"></div></div>
-            <div class="stagnation-warning" id="stagnationWarn"></div>
         </div>
         <div class="actions">
             <button class="btn-submit" id="btnSubmit" onclick="submitAnswer()" disabled>Submit</button>
@@ -379,13 +392,10 @@ async function submitAnswer() {
     document.getElementById('feedbackMsg').textContent = correct ? '✓ Correct!' : '✗ Incorrect';
     if (q.solution_text) document.getElementById('solutionText').textContent = q.solution_text;
 
-    // Show AI actions bar after answering
-    const aiBar = document.getElementById('aiActionsBar');
-    if (aiBar) {
-        aiBar.style.display = 'flex';
-        // Show hint button on wrong answers
-        const hintBtn = document.getElementById('btnAiHint');
-        if (hintBtn) hintBtn.style.display = correct ? 'none' : 'inline-flex';
+    // Show Advice button after wrong answer
+    if (!correct) {
+        const adviceBtn = document.getElementById('btnAiAdvice');
+        if (adviceBtn) adviceBtn.style.display = 'inline-flex';
     }
 
     document.getElementById('btnSubmit').style.display = 'none';
@@ -537,8 +547,8 @@ async function fetchAiHint(q) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 questionText: q.question_text, option1: q.option1, option2: q.option2,
-                option3: q.option3, option4: q.option4, correctAnswer: q.correct_answer,
-                selectedAnswer: document.querySelector('.option-label.selected')?.dataset.opt || '',
+                option3: q.option3, option4: q.option4,
+                correctAnswer: '', selectedAnswer: '',
                 conceptId, conceptName: '<%= concept.name %>'
             })
         });
@@ -550,6 +560,35 @@ async function fetchAiHint(q) {
         typewriterRender(content, data.hint || 'Could not generate hint.');
     } catch(e) {
         content.innerHTML = '<p style="color:var(--text-muted)">Hint unavailable. Please review the solution text.</p>';
+    }
+}
+
+async function fetchAiAdvice() {
+    const panel = document.getElementById('aiAdvicePanel');
+    const content = document.getElementById('aiAdviceContent');
+    if (!panel || !content) return;
+    panel.style.display = 'block';
+    showAiLoader(content);
+    const q = questions[currentIdx];
+    const selectedOpt = document.querySelector('.option-label.wrong')?.dataset.opt || document.querySelector('.option-label.selected')?.dataset.opt || '';
+    try {
+        const res = await fetch('/api/ai/hint', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                questionText: q.question_text, option1: q.option1, option2: q.option2,
+                option3: q.option3, option4: q.option4, correctAnswer: q.correct_answer,
+                selectedAnswer: selectedOpt,
+                conceptId, conceptName: '<%= concept.name %>'
+            })
+        });
+        if (res.status === 429) {
+            content.innerHTML = '<p style="color:var(--gold)">Daily AI limit reached. Try again tomorrow!</p>';
+            return;
+        }
+        const data = await res.json();
+        typewriterRender(content, data.hint || 'Could not generate advice.');
+    } catch(e) {
+        content.innerHTML = '<p style="color:var(--text-muted)">Advice unavailable right now.</p>';
     }
 }
 
