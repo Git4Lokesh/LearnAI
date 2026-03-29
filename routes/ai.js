@@ -9,7 +9,7 @@ const router = express.Router();
 router.post('/api/ai/hint', ensureAuthenticated, aiRateLimiter, async (req, res) => {
     try {
         const { questionText, option1, option2, option3, option4, correctAnswer, selectedAnswer, conceptId, conceptName } = req.body;
-        if (!questionText || !option1 || !option2 || !option3 || !option4 || !correctAnswer || !selectedAnswer || !conceptId || !conceptName) {
+        if (!questionText || !option1 || !option2 || !option3 || !option4 || !conceptId || !conceptName) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         const result = await generateHint({

@@ -13,7 +13,7 @@ logger = logging.getLogger("bkt")
 app = FastAPI(title="BKT Service", version="0.3.0")
 
 DEFAULT_P_INIT  = 0.2
-DEFAULT_P_LEARN = 0.15
+DEFAULT_P_LEARN = 0.04
 
 # ── Connection pool (replaces per-request connections) ──
 pool: Optional[asyncpg.Pool] = None
@@ -21,11 +21,15 @@ pool: Optional[asyncpg.Pool] = None
 # ── Learned params cache: { (concept_id, tier): {p_init, p_learn, p_guess, p_slip} } ──
 learned_params_cache: Dict[Tuple[str, int], Dict[str, float]] = {}
 
-# Per-tier params: harder questions have lower guess chance and lower slip
+# Per-tier BKT params — tuned for realistic JEE mastery progression
+# Easy correct = barely increases (high p_guess means "anyone could guess this")
+# Easy wrong = punished (low p_slip means "you shouldn't slip on easy if you know it")
+# Hard correct = strong signal (very low p_guess means "can't guess hard questions")
+# Hard wrong = moderate decrease (higher p_slip means "even experts slip on hard")
 TIER_PARAMS = {
-    1: {'p_guess': 0.35, 'p_slip': 0.15, 'p_learn': 0.12},  # easy
-    2: {'p_guess': 0.20, 'p_slip': 0.10, 'p_learn': 0.15},  # medium
-    3: {'p_guess': 0.08, 'p_slip': 0.05, 'p_learn': 0.18},  # hard
+    1: {'p_guess': 0.42, 'p_slip': 0.10, 'p_learn': 0.02},  # easy: barely learn, high guess, punish wrong
+    2: {'p_guess': 0.22, 'p_slip': 0.12, 'p_learn': 0.04},  # medium: moderate all around
+    3: {'p_guess': 0.06, 'p_slip': 0.15, 'p_learn': 0.06},  # hard: strong correct signal, forgiving wrong
 }
 # Expected time per tier in seconds (for confidence multiplier)
 TIER_EXPECTED_TIME = {1: 60, 2: 120, 3: 180}
