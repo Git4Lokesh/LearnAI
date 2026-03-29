@@ -1,0 +1,274 @@
+// AI Tutor Service — Gemini-powered hints, diagnosis, and chat
+// All features grounded in student's BKT mastery data and prerequisite graph
+import { geminiGenerate } from '../helpers/gemini.js';
+import { getUserConceptMastery } from '../helpers/mastery.js';
+import { checkPrerequisiteGaps } from './prerequisiteService.js';
+import { diagnosePrerequisites } from './diagnosisEngine.js';
+import db from '../config/db.js';
+
+const MODEL = 'gemini-2.0-flash';
+
+// ── Prompt Builders ──
+
+function buildHintSystemPrompt() {
+    return `You are a patient, encouraging JEE tutor helping an Indian student preparing for JEE Mains/Advanced.
+
+The student answered a question incorrectly. Your job:
+1. Acknowledge their attempt without being condescending
+2. Explain WHY their selected answer is wrong — what misconception or error led to it
+3. Give a conceptual nudge toward the correct reasoning WITHOUT directly stating the correct answer
+4. If the student has weak prerequisites listed below, connect the hint to those gaps
+5. Use simple language. If math is needed, use LaTeX with $...$ for inline and $$...$$ for display
+
+Keep the hint concise (3-5 paragraphs max). Use markdown formatting.
+Do NOT reveal the correct answer directly. Guide them to figure it out.`;
+}
+
+function buildHintUserPrompt(params) {
+    const optionMap = { option1: 'A', option2: 'B', option3: 'C', option4: 'D' };
+    const selectedLetter = optionMap[params.selectedAnswer] || '?';
+    const correctLetter = optionMap[params.correctAnswer] || '?';
+
+    let prereqSection = 'None — all prerequisites are strong.';
+    if (params.weakPrereqs && params.weakPrereqs.length > 0) {
+        prereqSection = params.weakPrereqs.map(p =>
+            `- ${p.name} (${Math.round(p.mastery * 100)}% mastery)`
+        ).join('\n');
+    }
+
+    return `**Question:** ${params.questionText}
+
+**Options:**
+A) ${params.option1}
+B) ${params.option2}
+C) ${params.option3}
+D) ${params.option4}
+
+**Student selected:** ${selectedLetter}) ${params[params.selectedAnswer]} (WRONG)
+**Correct answer:** ${correctLetter}) ${params[params.correctAnswer]}
+
+**Concept:** ${params.conceptName}
+**Student's mastery on this concept:** ${params.masteryPct}%
+
+**Weak prerequisites (mastery < 70%):**
+${prereqSection}`;
+}
+
+function buildDiagnosisSystemPrompt() {
+    return `You are a supportive learning advisor for a JEE preparation student. You have access to a detailed diagnostic analysis of why this student is struggling with a concept.
+
+Your job:
+1. Explain in a warm, encouraging tone what specific prerequisite gaps are causing the struggle
+2. For each gap, explain WHY it matters for the target concept (cause-and-effect)
+3. Provide a clear step-by-step study order based on the recommended path
+4. For each step, estimate effort (e.g., "~15 questions to strengthen")
+5. End with an encouraging message
+
+Use markdown formatting with headers, bold, and lists. Use LaTeX ($...$) for any math notation.
+Classify gaps using these severity labels:
+- 🔴 Root Cause: Never attempted or very low mastery — START HERE
+- 🟠 Critical: Below 50% mastery with its own unmastered prereqs
+- 🟡 Weak: Between 50-80% mastery, needs reinforcement
+- 🔵 Stale: Was mastered but hasn't been practiced recently`;
+}
+
+function buildDiagnosisUserPrompt(conceptName, masteryPct, diagnosis) {
+    const gaps = diagnosis.gaps || [];
+    const studyPath = diagnosis.studyPath || [];
+
+    let gapSection = 'No prerequisite gaps found.';
+    if (gaps.length > 0) {
+        gapSection = gaps.map(g => {
+            const emoji = g.severity === 'root_cause' ? '🔴' : g.severity === 'critical' ? '🟠' : g.severity === 'stale' ? '🔵' : '🟡';
+            return `- [${emoji} ${g.severity}] ${g.name}: ${Math.round((g.mastery || 0) * 100)}% mastery, ${g.questionsAnswered || 0} questions answered`;
+        }).join('\n');
+    }
+
+    let pathSection = 'No specific study path recommended.';
+    if (studyPath.length > 0) {
+        pathSection = studyPath.map((s, i) =>
+            `${i + 1}. ${s.name} (${Math.round((s.mastery || 0) * 100)}% → target 80%) — ${s.reason || 'prerequisite gap'}`
+        ).join('\n');
+    }
+
+    return `**Target Concept:** ${conceptName} (${masteryPct}% mastery)
+
+**Prerequisite Gaps (ordered by severity):**
+${gapSection}
+
+**Recommended Study Path:**
+${pathSection}
+
+${gaps.length === 0 ? 'All prerequisites are mastered. The student needs more practice on the target concept itself. Suggest varied problem-solving strategies and deeper conceptual understanding.' : ''}`;
+}
+
+function buildChatSystemPrompt(masteryProfile, recentAttempts, gaps) {
+    // Group mastery by subject
+    const bySubject = {};
+    for (const m of masteryProfile) {
+        const subj = m.subject || 'Other';
+        if (!bySubject[subj]) bySubject[subj] = { weak: [], moderate: [], strong: [] };
+        const pct = Math.round((parseFloat(m.mastery) || 0.2) * 100);
+        const entry = `${m.name} (${pct}%)`;
+        if (pct < 50) bySubject[subj].weak.push(entry);
+        else if (pct < 80) bySubject[subj].moderate.push(entry);
+        else bySubject[subj].strong.push(entry);
+    }
+
+    let profileSummary = '';
+    for (const [subj, data] of Object.entries(bySubject)) {
+        profileSummary += `\n**${subj}:**\n`;
+        if (data.strong.length) profileSummary += `  Strong (≥80%): ${data.strong.slice(0, 10).join(', ')}${data.strong.length > 10 ? ` (+${data.strong.length - 10} more)` : ''}\n`;
+        if (data.moderate.length) profileSummary += `  Moderate (50-80%): ${data.moderate.slice(0, 10).join(', ')}${data.moderate.length > 10 ? ` (+${data.moderate.length - 10} more)` : ''}\n`;
+        if (data.weak.length) profileSummary += `  Weak (<50%): ${data.weak.slice(0, 10).join(', ')}${data.weak.length > 10 ? ` (+${data.weak.length - 10} more)` : ''}\n`;
+    }
+
+    let recentSection = 'No recent practice data.';
+    if (recentAttempts.length > 0) {
+        recentSection = recentAttempts.map(a =>
+            `- ${a.concept_name}: ${a.correct ? '✓' : '✗'} (Tier ${a.difficulty_tier})`
+        ).join('\n');
+    }
+
+    let gapSection = 'No significant prerequisite gaps.';
+    if (gaps.length > 0) {
+        gapSection = gaps.map(g => `- ${g.name} (${Math.round((g.mastery || 0) * 100)}%)`).slice(0, 15).join('\n');
+    }
+
+    return `You are an AI study tutor for a JEE Mains/Advanced preparation student on the Learn.ai platform. You have access to the student's complete learning profile.
+
+Your capabilities:
+- Answer conceptual questions about Physics, Chemistry, and Mathematics
+- Recommend what to study next based on their mastery data
+- Explain topics at the right level based on their current understanding
+- Provide study strategies and exam tips
+
+Rules:
+1. Always ground your advice in the student's actual mastery data provided below
+2. When recommending topics, reference their specific weak areas
+3. Use LaTeX ($...$) for math notation
+4. Use markdown for formatting (headers, bold, lists)
+5. Be encouraging but honest about areas that need work
+6. Keep responses focused and actionable
+7. If asked about a topic, check their mastery on related concepts before explaining
+
+**Student Mastery Profile:**
+${profileSummary}
+
+**Recent Practice (last 20 attempts):**
+${recentSection}
+
+**Current Prerequisite Gaps:**
+${gapSection}`;
+}
+
+// ── Exported Functions ──
+
+export async function generateHint({ userId, questionText, option1, option2, option3, option4, correctAnswer, selectedAnswer, conceptId, conceptName }) {
+    try {
+        // Fetch mastery and weak prereqs
+        const mastery = await getUserConceptMastery(userId, conceptId);
+        const masteryPct = Math.round(parseFloat(mastery.mastery) * 100);
+
+        const gapsRes = await checkPrerequisiteGaps(db, userId, conceptId);
+        const weakPrereqs = gapsRes.filter(g => parseFloat(g.mastery) < 0.7);
+
+        const systemPrompt = buildHintSystemPrompt();
+        const userPrompt = buildHintUserPrompt({
+            questionText, option1, option2, option3, option4,
+            correctAnswer, selectedAnswer, conceptName, masteryPct, weakPrereqs
+        });
+
+        const hint = await geminiGenerate(systemPrompt, userPrompt, MODEL);
+        return { hint: hint || 'Could not generate a hint. Please review the solution text.' };
+    } catch (err) {
+        console.error('generateHint error:', err.message);
+        return { hint: 'Hint temporarily unavailable. Please review the solution text below.' };
+    }
+}
+
+export async function generateDiagnosis({ userId, conceptId }) {
+    let rawDiagnosis = null;
+    try {
+        // Get full diagnosis from existing engine
+        rawDiagnosis = await diagnosePrerequisites(db, userId, conceptId);
+
+        // Get concept name and mastery
+        const conceptRes = await db.query('SELECT name FROM concepts WHERE id=$1', [conceptId]);
+        const conceptName = conceptRes.rows[0]?.name || conceptId;
+        const mastery = await getUserConceptMastery(userId, conceptId);
+        const masteryPct = Math.round(parseFloat(mastery.mastery) * 100);
+
+        const systemPrompt = buildDiagnosisSystemPrompt();
+        const userPrompt = buildDiagnosisUserPrompt(conceptName, masteryPct, rawDiagnosis);
+
+        const explanation = await geminiGenerate(systemPrompt, userPrompt, MODEL);
+
+        return {
+            explanation: explanation || 'Could not generate diagnosis. See the study path below.',
+            studyPath: rawDiagnosis.studyPath || [],
+            rawDiagnosis
+        };
+    } catch (err) {
+        console.error('generateDiagnosis error:', err.message);
+        return {
+            explanation: 'AI diagnosis temporarily unavailable. Here are your prerequisite gaps:',
+            studyPath: rawDiagnosis?.studyPath || [],
+            rawDiagnosis: rawDiagnosis || { gaps: [], studyPath: [] }
+        };
+    }
+}
+
+export async function generateChatResponse({ userId, message, conversationHistory = [] }) {
+    try {
+        // Fetch full mastery profile
+        const masteryRes = await db.query(`
+            SELECT c.id, c.name, c.subject, COALESCE(ucm.mastery, 0.2) as mastery,
+                   COALESCE(ucm.questions_answered, 0) as questions_answered
+            FROM concepts c
+            LEFT JOIN user_concept_mastery ucm ON ucm.concept_id = c.id AND ucm.user_id = $1
+            ORDER BY c.subject, c.name
+        `, [userId]);
+
+        // Fetch recent 20 attempts
+        const recentRes = await db.query(`
+            SELECT c.name as concept_name, uqa.correct, q.difficulty_tier
+            FROM user_question_attempts uqa
+            JOIN questions q ON q.id = uqa.question_id
+            JOIN concepts c ON c.id = q.concept_id
+            WHERE uqa.user_id = $1
+            ORDER BY uqa.attempted_at DESC
+            LIMIT 20
+        `, [userId]);
+
+        // Fetch prerequisite gaps (concepts with mastery < 0.7 that block others)
+        const gapsRes = await db.query(`
+            SELECT DISTINCT c.name, COALESCE(ucm.mastery, 0.2) as mastery
+            FROM concept_prerequisites cp
+            JOIN concepts c ON c.id = cp.prereq_id
+            LEFT JOIN user_concept_mastery ucm ON ucm.concept_id = cp.prereq_id AND ucm.user_id = $1
+            WHERE COALESCE(ucm.mastery, 0.2) < 0.7
+            ORDER BY COALESCE(ucm.mastery, 0.2) ASC
+            LIMIT 20
+        `, [userId]);
+
+        const systemPrompt = buildChatSystemPrompt(masteryRes.rows, recentRes.rows, gapsRes.rows);
+
+        // Build conversation context for Gemini
+        let userPrompt = '';
+        if (conversationHistory.length > 0) {
+            userPrompt += 'Previous conversation:\n';
+            for (const msg of conversationHistory.slice(-10)) { // last 10 messages for context window
+                userPrompt += `${msg.role === 'user' ? 'Student' : 'Tutor'}: ${msg.content}\n\n`;
+            }
+            userPrompt += '---\n\n';
+        }
+        userPrompt += `Student: ${message}`;
+
+        const response = await geminiGenerate(systemPrompt, userPrompt, MODEL);
+        return { response: response || 'I\'m having trouble responding right now. Please try again.' };
+    } catch (err) {
+        console.error('generateChatResponse error:', err.message);
+        return { response: 'I\'m having trouble connecting right now. Please try again in a moment.' };
+    }
+}

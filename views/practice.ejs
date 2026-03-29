@@ -13,6 +13,7 @@
     };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="/css/theme.css">
     <style>
         :root { --muted: var(--text-dim); }
@@ -137,6 +138,50 @@
             .btn-submit, .btn-next { width: 100%; padding: 14px; font-size: 1rem; }
             .actions { flex-direction: column; }
             .summary-stats { flex-direction: column; gap: 1rem; }
+        }
+        /* AI Panels */
+        .ai-panel { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.2); border-radius: 12px; margin-top: 1rem; overflow: hidden; backdrop-filter: blur(12px); }
+        .ai-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(124,58,237,0.08); border-bottom: 1px solid rgba(124,58,237,0.15); font-size: 0.85rem; font-weight: 600; color: var(--purple-light); }
+        .ai-panel-body { padding: 16px; font-size: 0.9rem; line-height: 1.7; color: var(--text); }
+        .ai-panel-body h1,.ai-panel-body h2,.ai-panel-body h3 { color: var(--gold); margin: 1rem 0 0.5rem; font-size: 1rem; }
+        .ai-panel-body ul,.ai-panel-body ol { padding-left: 1.25rem; margin: 0.5rem 0; }
+        .ai-panel-body strong { color: var(--text-primary); }
+        .ai-panel-body a { color: var(--gold); }
+        .btn-ai { background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.3); color: var(--purple-light); border-radius: 8px; padding: 6px 14px; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+        .btn-ai:hover { background: rgba(124,58,237,0.25); border-color: var(--purple); transform: translateY(-1px); }
+        .ai-loader { padding: 1rem; }
+        .ai-loader-text { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; font-style: italic; }
+        .ai-loader-bar { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--purple), var(--gold), var(--purple)); background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite; }
+
+        /* Floating Chat Widget */
+        .chat-widget { position: fixed; bottom: 24px; right: 150px; z-index: 1000; }
+        .chat-widget-toggle { width: 56px; height: 56px; border-radius: 50%; background: var(--gradient-purple); border: 2px solid var(--gold); color: white; font-size: 1.5rem; cursor: pointer; box-shadow: var(--shadow-lg), var(--shadow-glow-purple); transition: all 0.3s; display: flex; align-items: center; justify-content: center; }
+        .chat-widget-toggle:hover { transform: scale(1.1); }
+        .chat-widget-panel { position: absolute; bottom: 70px; right: 0; width: 400px; height: 550px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-xl); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: var(--shadow-xl); display: none; flex-direction: column; overflow: hidden; }
+        .chat-widget-panel.open { display: flex; }
+        .chat-widget-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(124,58,237,0.1); border-bottom: 1px solid var(--glass-border); font-weight: 600; font-size: 0.9rem; color: var(--purple-light); }
+        .chat-widget-header button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; }
+        .chat-widget-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .chat-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.6; }
+        .chat-msg.user { align-self: flex-end; background: var(--purple); color: white; border-bottom-right-radius: 4px; }
+        .chat-msg.assistant { align-self: flex-start; background: var(--card); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .chat-msg.assistant h1,.chat-msg.assistant h2,.chat-msg.assistant h3 { font-size: 0.9rem; color: var(--gold); margin: 0.5rem 0 0.25rem; }
+        .chat-msg.assistant ul,.chat-msg.assistant ol { padding-left: 1rem; margin: 0.25rem 0; }
+        .chat-msg.assistant strong { color: var(--text-primary); }
+        .chat-typing { align-self: flex-start; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; border-bottom-left-radius: 4px; }
+        .chat-typing-dots { display: flex; gap: 4px; }
+        .chat-typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: dotPulse 1.4s ease-in-out infinite; }
+        .chat-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .chat-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPulse { 0%,60%,100% { opacity: 0.3; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+        .chat-widget-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); background: var(--surface); }
+        .chat-widget-input textarea { flex: 1; background: rgba(15,23,42,0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 8px 12px; font-size: 0.85rem; resize: none; font-family: inherit; }
+        .chat-widget-input textarea:focus { outline: none; border-color: var(--purple); }
+        .chat-widget-input button { background: var(--gradient-purple); border: none; color: white; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+        .chat-widget-input button:hover { opacity: 0.9; }
+        @media (max-width: 768px) {
+            .chat-widget { bottom: 16px; right: 16px; }
+            .chat-widget-panel { position: fixed; inset: 0; width: 100%; height: 100%; border-radius: 0; bottom: 0; right: 0; }
         }
     </style>
 </head>
@@ -328,6 +373,21 @@ async function submitAnswer() {
     document.getElementById('feedbackMsg').textContent = correct ? '✓ Correct!' : '✗ Incorrect';
     if (q.solution_text) document.getElementById('solutionText').textContent = q.solution_text;
 
+    // Show AI hint button on wrong answer
+    if (!correct) {
+        const hintBtn = document.createElement('button');
+        hintBtn.className = 'btn-ai';
+        hintBtn.innerHTML = '<i class="bi bi-lightbulb"></i> Get AI Hint';
+        hintBtn.onclick = () => fetchAiHint(q);
+        fb.appendChild(hintBtn);
+        const hintPanel = document.createElement('div');
+        hintPanel.id = 'aiHintPanel';
+        hintPanel.className = 'ai-panel';
+        hintPanel.style.display = 'none';
+        hintPanel.innerHTML = '<div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div>';
+        fb.parentNode.insertBefore(hintPanel, fb.nextSibling);
+    }
+
     document.getElementById('btnSubmit').style.display = 'none';
     document.getElementById('btnNext').style.display = 'block';
 
@@ -365,6 +425,19 @@ async function submitAnswer() {
                 `<a href="/practice/${g.concept_id}" class="prereq-link">${g.name} (${Math.round(g.mastery*100)}%)</a>`
             ).join(', ');
             warn.innerHTML = `⚠️ <strong>Struggling with this concept?</strong><br>Consider reviewing these prerequisites first: ${gapsList}`;
+            // Add AI diagnosis button
+            const diagBtn = document.createElement('button');
+            diagBtn.className = 'btn-ai';
+            diagBtn.innerHTML = '<i class="bi bi-search"></i> Why am I stuck? (AI)';
+            diagBtn.style.marginTop = '10px';
+            diagBtn.onclick = () => fetchAiDiagnosis();
+            warn.appendChild(diagBtn);
+            const diagPanel = document.createElement('div');
+            diagPanel.id = 'aiDiagnosisPanel';
+            diagPanel.className = 'ai-panel';
+            diagPanel.style.display = 'none';
+            diagPanel.innerHTML = '<div class="ai-panel-header"><span><i class="bi bi-search"></i> AI Diagnosis</span></div><div class="ai-panel-body" id="aiDiagnosisContent"></div>';
+            warn.parentNode.insertBefore(diagPanel, warn.nextSibling);
         }
     } catch(e) { console.error(e); }
 
@@ -442,6 +515,165 @@ function nextQuestion() {
 }
 
 renderQuestion();
+
+// ── AI Helper Functions ──
+function typewriterRender(container, fullText, onComplete) {
+    let index = 0;
+    const charsPerFrame = 20;
+    container.innerHTML = '';
+    function frame() {
+        if (index < fullText.length) {
+            index = Math.min(index + charsPerFrame, fullText.length);
+            container.innerHTML = marked.parse(fullText.substring(0, index));
+            requestAnimationFrame(frame);
+        } else {
+            container.innerHTML = marked.parse(fullText);
+            if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([container]);
+            if (onComplete) onComplete();
+        }
+    }
+    requestAnimationFrame(frame);
+}
+
+function showAiLoader(container) {
+    container.innerHTML = '<div class="ai-loader"><div class="ai-loader-text">Your AI tutor is thinking...</div><div class="ai-loader-bar"></div></div>';
+}
+
+async function fetchAiHint(q) {
+    const panel = document.getElementById('aiHintPanel');
+    const content = document.getElementById('aiHintContent');
+    if (!panel || !content) return;
+    panel.style.display = 'block';
+    showAiLoader(content);
+    try {
+        const res = await fetch('/api/ai/hint', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                questionText: q.question_text, option1: q.option1, option2: q.option2,
+                option3: q.option3, option4: q.option4, correctAnswer: q.correct_answer,
+                selectedAnswer: document.querySelector('.option-label.selected')?.dataset.opt || '',
+                conceptId, conceptName: '<%= concept.name %>'
+            })
+        });
+        if (res.status === 429) {
+            content.innerHTML = '<p style="color:var(--gold)">Daily AI limit reached. Try again tomorrow!</p>';
+            return;
+        }
+        const data = await res.json();
+        typewriterRender(content, data.hint || 'Could not generate hint.');
+    } catch(e) {
+        content.innerHTML = '<p style="color:var(--text-muted)">Hint unavailable. Please review the solution text.</p>';
+    }
+}
+
+async function fetchAiDiagnosis() {
+    const panel = document.getElementById('aiDiagnosisPanel');
+    const content = document.getElementById('aiDiagnosisContent');
+    if (!panel || !content) return;
+    panel.style.display = 'block';
+    showAiLoader(content);
+    try {
+        const res = await fetch('/api/ai/diagnose', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conceptId })
+        });
+        if (res.status === 429) {
+            content.innerHTML = '<p style="color:var(--gold)">Daily AI limit reached. Try again tomorrow!</p>';
+            return;
+        }
+        const data = await res.json();
+        typewriterRender(content, data.explanation || 'Could not generate diagnosis.');
+    } catch(e) {
+        content.innerHTML = '<p style="color:var(--text-muted)">Diagnosis unavailable right now.</p>';
+    }
+}
+
+// ── Floating Chat Widget ──
+(function initChatWidget() {
+    const widget = document.getElementById('chatWidgetPanel');
+    const toggle = document.getElementById('chatWidgetToggle');
+    const input = document.getElementById('chatWidgetInput');
+    const sendBtn = document.getElementById('chatWidgetSend');
+    const messages = document.getElementById('chatWidgetMessages');
+    if (!toggle) return;
+
+    toggle.onclick = () => {
+        widget.classList.toggle('open');
+        if (widget.classList.contains('open') && messages.children.length === 0) {
+            addChatMsg('assistant', 'Hi! I\'m your AI study tutor. I know your mastery levels across all subjects. Ask me anything — what to study next, why you\'re stuck, or explain a concept!');
+        }
+    };
+
+    function addChatMsg(role, text) {
+        const div = document.createElement('div');
+        div.className = 'chat-msg ' + role;
+        if (role === 'assistant') {
+            typewriterRender(div, text);
+        } else {
+            div.textContent = text;
+        }
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function showTyping() {
+        const div = document.createElement('div');
+        div.className = 'chat-typing';
+        div.id = 'chatTypingIndicator';
+        div.innerHTML = '<div class="chat-typing-dots"><span></span><span></span><span></span></div>';
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function removeTyping() {
+        const el = document.getElementById('chatTypingIndicator');
+        if (el) el.remove();
+    }
+
+    async function sendMessage() {
+        const msg = input.value.trim();
+        if (!msg) return;
+        input.value = '';
+        addChatMsg('user', msg);
+        showTyping();
+        try {
+            const res = await fetch('/api/ai/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
+            removeTyping();
+            if (res.status === 429) {
+                addChatMsg('assistant', 'Daily AI limit reached. Try again tomorrow!');
+                return;
+            }
+            const data = await res.json();
+            addChatMsg('assistant', data.response || 'Sorry, I couldn\'t respond.');
+        } catch(e) {
+            removeTyping();
+            addChatMsg('assistant', 'Something went wrong. Please try again.');
+        }
+    }
+
+    sendBtn.onclick = sendMessage;
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+})();
 </script>
+<!-- Floating Chat Widget -->
+<div class="chat-widget">
+    <button class="chat-widget-toggle" id="chatWidgetToggle" aria-label="Open AI Chat"><i class="bi bi-robot"></i></button>
+    <div class="chat-widget-panel" id="chatWidgetPanel">
+        <div class="chat-widget-header">
+            <span><i class="bi bi-robot"></i> AI Study Tutor</span>
+            <button onclick="document.getElementById('chatWidgetPanel').classList.remove('open')"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="chat-widget-messages" id="chatWidgetMessages"></div>
+        <div class="chat-widget-input">
+            <textarea id="chatWidgetInput" placeholder="Ask your AI tutor anything..." rows="1" aria-label="Chat message"></textarea>
+            <button id="chatWidgetSend" aria-label="Send"><i class="bi bi-send"></i></button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

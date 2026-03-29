@@ -53,6 +53,8 @@ async function selectDiagnosticQuestions() {
             AND q.difficulty_tier = $1
             AND c.subject LIKE $2
             AND q.concept_id NOT IN (SELECT UNNEST($3::text[]))
+            AND q.question_text NOT LIKE '%Sample Q%'
+            AND q.source != 'Seed'
         ) sub WHERE rn = 1
         ORDER BY RANDOM()
         LIMIT $4
@@ -80,6 +82,8 @@ async function selectDiagnosticQuestions() {
                 AND q.difficulty_tier = $1
                 AND c.subject LIKE $2
                 AND q.concept_id NOT IN (SELECT UNNEST($3::text[]))
+                AND q.question_text NOT LIKE '%Sample Q%'
+                AND q.source != 'Seed'
             ) sub WHERE rn = 1
             ORDER BY RANDOM()
             LIMIT $4
@@ -104,6 +108,8 @@ async function selectDiagnosticQuestions() {
           WHERE q.status = 'approved'
             AND c.subject LIKE $1
             AND q.id != ALL($2::int[])
+            AND q.question_text NOT LIKE '%Sample Q%'
+            AND q.source != 'Seed'
           ORDER BY RANDOM()
           LIMIT $3
         `, [filter, alreadySelectedIds.length > 0 ? alreadySelectedIds : [0], deficit]);
