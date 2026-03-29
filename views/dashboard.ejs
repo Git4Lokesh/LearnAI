@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="/css/theme.css">
     <style>
         :root { --muted: var(--text-dim); }
@@ -1377,184 +1378,56 @@ async function diagnoseConcept() {
     diagnosisRunning = true;
     const btn = document.getElementById('btnDiagnose');
     btn.disabled = true;
-    btn.textContent = '🔍 Diagnosing...';
+    btn.textContent = '🔍 Analyzing...';
 
-    document.getElementById('diagBody').innerHTML = '<div class="diag-empty"><div class="loading-spinner"></div>Running multi-signal prerequisite analysis...</div>';
+    document.getElementById('diagBody').innerHTML = '<div style="padding:2rem;text-align:center"><div class="loading-spinner"></div><div style="color:var(--text-muted);font-size:0.85rem;margin-top:12px;font-style:italic">AI is analyzing your prerequisites...</div><div style="height:4px;border-radius:2px;margin-top:12px;background:linear-gradient(90deg,var(--purple),var(--gold),var(--purple));background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite"></div></div>';
     openDiagnosis();
 
     try {
-        const response = await fetch('/api/diagnose-concept', {
+        const response = await fetch('/api/ai/diagnose', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ conceptId: selectedConcept })
         });
 
+        if (response.status === 429) {
+            document.getElementById('diagBody').innerHTML = '<div style="padding:2rem;text-align:center;color:var(--gold)"><i class="bi bi-hourglass-split" style="font-size:2rem;display:block;margin-bottom:8px"></i>Daily AI limit reached. Try again tomorrow!</div>';
+            return;
+        }
+
         if (!response.ok) throw new Error('Diagnosis failed');
         const data = await response.json();
 
-        let html = '';
+        // Render AI explanation with markdown
+        const diagBody = document.getElementById('diagBody');
+        diagBody.innerHTML = '<div id="aiDiagContent" style="padding:4px"></div>';
+        const container = document.getElementById('aiDiagContent');
 
-        // ── Header: Target concept + readiness arc ──
-        const tColor = data.target.mastery >= 80 ? 'var(--green)' : data.target.mastery >= 50 ? 'var(--gold)' : 'var(--red)';
-        html += `<div style="text-align:center;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.06)">
-            <div style="font-size:1rem;font-weight:600;color:var(--text);margin-bottom:2px">${data.target.name}</div>
-            <div style="font-size:0.7rem;color:var(--muted);margin-bottom:12px">Current mastery: <span style="color:${tColor};font-weight:600">${data.target.mastery}%</span>${data.target.rawMastery !== data.target.mastery ? ` <span style="opacity:0.5">(raw ${data.target.rawMastery}%, decayed)</span>` : ''}</div>
-            ${renderReadinessArc(data.overallReadiness)}
-            <div style="display:flex;justify-content:center;gap:1.5rem;margin-top:10px">
-                <div style="text-align:center">
-                    <div style="font-size:1.1rem;font-weight:700;color:var(--text)">${data.totalPrereqs}</div>
-                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Prerequisites</div>
-                </div>
-                <div style="text-align:center">
-                    <div style="font-size:1.1rem;font-weight:700;color:var(--purple-light)">~${data.estimatedEffort}</div>
-                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Questions to ready</div>
-                </div>
-                <div style="text-align:center">
-                    <div style="font-size:1.1rem;font-weight:700;color:var(--cyan)">${data.learnedParamsAvailable || 0}</div>
-                    <div style="font-size:0.55rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">EM-fitted concepts</div>
-                </div>
-            </div>
-        </div>`;
-
-        // ── Summary bar: severity breakdown ──
-        if (data.totalPrereqs > 0) {
-            const s = data.summary;
-            const total = data.totalPrereqs;
-            const segments = [
-                { count: s.rootCauses, color: '#EF4444', label: 'Root cause' },
-                { count: s.critical, color: '#F59E0B', label: 'Critical' },
-                { count: s.stale, color: '#A855F7', label: 'Stale' },
-                { count: s.weak, color: '#22D3EE', label: 'Weak' },
-                { count: s.mastered, color: '#10B981', label: 'Mastered' }
-            ].filter(seg => seg.count > 0);
-            html += `<div style="padding:10px 0">
-                <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;gap:1px">
-                    ${segments.map(seg => `<div style="flex:${seg.count};background:${seg.color};min-width:3px" title="${seg.label}: ${seg.count}"></div>`).join('')}
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;justify-content:center">
-                    ${segments.map(seg => `<span style="font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:3px"><span style="width:6px;height:6px;border-radius:50%;background:${seg.color};flex-shrink:0"></span>${seg.count} ${seg.label}</span>`).join('')}
-                </div>
-            </div>`;
-        }
-
-        // ── No prereqs case ──
-        if (data.totalPrereqs === 0) {
-            html += `<div style="text-align:center;padding:1.5rem 0">
-                <div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:1.5rem">✅</div>
-                <div style="font-size:0.9rem;color:var(--text);font-weight:500">No prerequisites</div>
-                <div style="font-size:0.75rem;color:var(--muted);margin-top:4px">This is a foundational concept — dive right in.</div>
-            </div>`;
-            html += renderSignalLegend();
-            document.getElementById('diagBody').innerHTML = html;
-            return;
-        }
-
-        // ── All clear case — still show rich data ──
-        const hasGaps = data.summary.rootCauses + data.summary.critical + data.summary.stale + data.summary.weak;
-        if (hasGaps === 0) {
-            html += `<div style="text-align:center;padding:12px 0 8px">
-                <div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:1.5rem">✅</div>
-                <div style="font-size:0.9rem;color:var(--green);font-weight:600">All prerequisites mastered</div>
-                <div style="font-size:0.72rem;color:var(--muted);margin-top:4px">Your foundation is solid. You're ready to tackle this concept.</div>
-            </div>`;
-            // Still show mastered prereqs with their signal data
-            if (data.mastered.length > 0) {
-                html += `<div class="diag-section">
-                    <div class="diag-section-title"><span style="color:var(--green)">✅ Prerequisite Health</span><span class="diag-section-count">${data.mastered.length}</span></div>
-                    ${data.mastered.map(n => renderRichNode(n, 'var(--green)', 'var(--green)')).join('')}
-                </div>`;
+        // Typing animation with markdown
+        const fullText = data.explanation || 'Could not generate diagnosis.';
+        let index = 0;
+        const charsPerFrame = 15;
+        function typeFrame() {
+            if (index < fullText.length) {
+                index = Math.min(index + charsPerFrame, fullText.length);
+                container.innerHTML = marked.parse(fullText.substring(0, index));
+                requestAnimationFrame(typeFrame);
+            } else {
+                container.innerHTML = marked.parse(fullText);
+                if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([container]);
+                // Add clickable study path links if available
+                if (data.studyPath && data.studyPath.length > 0) {
+                    const pathHtml = data.studyPath.map(s =>
+                        `<a href="/practice/${s.id || s.concept_id}" style="display:inline-block;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);border-radius:6px;padding:3px 10px;margin:3px;font-size:0.75rem;color:var(--purple-light);text-decoration:none;transition:all 0.2s" onmouseover="this.style.background='rgba(124,58,237,0.25)'" onmouseout="this.style.background='rgba(124,58,237,0.15)'">${s.name} (${Math.round((s.mastery || 0) * 100)}%)</a>`
+                    ).join('');
+                    container.innerHTML += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📍 Study Path</div>${pathHtml}</div>`;
+                }
             }
-            // Show divergence insights even in all-clear
-            if (data.divergenceInsights && data.divergenceInsights.length > 0) {
-                html += renderDivergenceSection(data.divergenceInsights);
-            }
-            html += renderSignalLegend();
-            document.getElementById('diagBody').innerHTML = html;
-            return;
         }
-
-        // ── Gap sections ──
-        if (data.rootCauses.length > 0) {
-            html += `<div class="diag-section">
-                <div class="diag-section-title"><span style="color:var(--red)">⚠ Root Causes — Start Here</span><span class="diag-section-count">${data.rootCauses.length}</span></div>
-                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Deepest unmastered prereqs blocking your progress. Fix these first.</div>
-                ${data.rootCauses.map(n => renderRichNode(n, 'var(--red)', 'var(--red-light)')).join('')}
-            </div>`;
-        }
-
-        if (data.critical.length > 0) {
-            html += `<div class="diag-section">
-                <div class="diag-section-title"><span style="color:var(--gold)">🔶 Critical Gaps</span><span class="diag-section-count">${data.critical.length}</span></div>
-                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Below mastery threshold with high downstream impact.</div>
-                ${data.critical.map(n => renderRichNode(n, 'var(--gold)', 'var(--gold)')).join('')}
-            </div>`;
-        }
-
-        if (data.stale && data.stale.length > 0) {
-            html += `<div class="diag-section">
-                <div class="diag-section-title"><span style="color:var(--purple-light)">⏳ Stale — Needs Review</span><span class="diag-section-count">${data.stale.length}</span></div>
-                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Previously learned but knowledge has decayed over time.</div>
-                ${data.stale.map(n => renderRichNode(n, 'var(--purple-light)', 'var(--purple-light)')).join('')}
-            </div>`;
-        }
-
-        if (data.weak.length > 0) {
-            html += `<div class="diag-section">
-                <div class="diag-section-title"><span style="color:var(--cyan)">📘 Weak — Almost There</span><span class="diag-section-count">${data.weak.length}</span></div>
-                <div style="font-size:0.62rem;color:var(--muted);padding:0 10px 6px">Close to mastery. A few more practice questions should do it.</div>
-                ${data.weak.map(n => renderRichNode(n, 'var(--cyan)', 'var(--cyan)')).join('')}
-            </div>`;
-        }
-
-        // Mastered — expandable
-        if (data.mastered.length > 0) {
-            html += `<div class="diag-section">
-                <div class="diag-section-title" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.diag-expand-icon').textContent=this.nextElementSibling.style.display==='none'?'▸':'▾'">
-                    <span style="color:var(--green)">✅ Mastered</span><span class="diag-section-count">${data.mastered.length}</span>
-                    <span class="diag-expand-icon" style="margin-left:auto;font-size:0.7rem;color:var(--muted)">▸</span>
-                </div>
-                <div style="display:none">
-                    ${data.mastered.map(n => renderRichNode(n, 'var(--green)', 'var(--green)')).join('')}
-                </div>
-            </div>`;
-        }
-
-        // ── Optimal study path ──
-        if (data.suggestedPath && data.suggestedPath.length > 0) {
-            html += `<div class="diag-path" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;margin-top:4px">
-                <div class="diag-path-title">📍 Optimal Study Path</div>
-                <div style="font-size:0.62rem;color:var(--muted);padding:0 0 8px">Impact-weighted topological order. Follow this sequence for fastest readiness.</div>
-                <div style="display:flex;flex-direction:column;gap:6px">
-                    ${data.suggestedPath.map((s, i) => {
-                        const sColor = s.mastery >= 50 ? 'var(--gold)' : 'var(--red-light)';
-                        return `<div class="diag-node" onclick="diagNodeClick('${s.id}')" style="border:1px solid rgba(124,58,237,0.15);padding:10px 12px">
-                            <div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;box-shadow:0 0 8px rgba(124,58,237,0.3)">${i + 1}</div>
-                            <div style="flex:1;min-width:0">
-                                <div style="font-size:0.82rem;color:var(--text);font-weight:500">${s.name}</div>
-                                ${s.reason ? `<div style="font-size:0.62rem;color:var(--muted);margin-top:2px;line-height:1.3">${s.reason}</div>` : ''}
-                            </div>
-                            <div style="text-align:right;flex-shrink:0">
-                                <div style="font-size:0.82rem;font-weight:700;color:${sColor}">${s.mastery}%</div>
-                                ${s.questionsNeeded ? `<div style="font-size:0.55rem;color:var(--muted)">~${s.questionsNeeded}q</div>` : ''}
-                            </div>
-                        </div>`;
-                    }).join('')}
-                </div>
-            </div>`;
-        }
-
-        // ── Divergence insights ──
-        if (data.divergenceInsights && data.divergenceInsights.length > 0) {
-            html += renderDivergenceSection(data.divergenceInsights);
-        }
-
-        // ── Signal legend ──
-        html += renderSignalLegend();
-
-        document.getElementById('diagBody').innerHTML = html;
+        requestAnimationFrame(typeFrame);
 
     } catch (error) {
-        document.getElementById('diagBody').innerHTML = `<div class="diag-empty" style="color:var(--red)"><i class="bi bi-exclamation-triangle" style="color:var(--red)"></i>${error.message}</div>`;
+        document.getElementById('diagBody').innerHTML = `<div style="padding:2rem;text-align:center;color:var(--red)"><i class="bi bi-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:8px"></i>${error.message}</div>`;
     } finally {
         diagnosisRunning = false;
         btn.disabled = false;

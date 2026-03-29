@@ -6,7 +6,7 @@ import { checkPrerequisiteGaps } from './prerequisiteService.js';
 import { diagnosePrerequisites } from './diagnosisEngine.js';
 import db from '../config/db.js';
 
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-2.5-flash';
 
 // ── Prompt Builders ──
 
@@ -55,51 +55,56 @@ ${prereqSection}`;
 }
 
 function buildDiagnosisSystemPrompt() {
-    return `You are a supportive learning advisor for a JEE preparation student. You have access to a detailed diagnostic analysis of why this student is struggling with a concept.
+    return `You are a concise, insightful JEE preparation advisor. Analyze the student's learning data and give actionable advice.
 
-Your job:
-1. Explain in a warm, encouraging tone what specific prerequisite gaps are causing the struggle
-2. For each gap, explain WHY it matters for the target concept (cause-and-effect)
-3. Provide a clear step-by-step study order based on the recommended path
-4. For each step, estimate effort (e.g., "~15 questions to strengthen")
-5. End with an encouraging message
-
-Use markdown formatting with headers, bold, and lists. Use LaTeX ($...$) for any math notation.
-Classify gaps using these severity labels:
-- 🔴 Root Cause: Never attempted or very low mastery — START HERE
-- 🟠 Critical: Below 50% mastery with its own unmastered prereqs
-- 🟡 Weak: Between 50-80% mastery, needs reinforcement
-- 🔵 Stale: Was mastered but hasn't been practiced recently`;
+Rules:
+1. Be CONCISE — no filler, no generic motivational fluff. Every sentence should contain useful information.
+2. If all prerequisites are mastered, DON'T list them. Instead focus on:
+   - What specific problem-solving strategies to try (e.g., "try drawing free body diagrams before writing equations")
+   - Common JEE traps and misconceptions for this topic
+   - Which types of problems to practice (numerical, conceptual, multi-step)
+   - How this topic connects to other JEE topics they might see in the exam
+3. If there ARE prerequisite gaps, be specific about the cause-and-effect: "You're weak at X, which means you can't do Y because Z"
+4. Give concrete next steps, not vague advice
+5. Use markdown formatting. Use $...$ for math. Keep it under 200 words.
+6. Sound like a smart senior student helping a junior, not a textbook.`;
 }
 
 function buildDiagnosisUserPrompt(conceptName, masteryPct, diagnosis) {
     const gaps = diagnosis.gaps || [];
     const studyPath = diagnosis.studyPath || [];
+    const questionsAnswered = diagnosis.questionsAnswered || 0;
 
-    let gapSection = 'No prerequisite gaps found.';
-    if (gaps.length > 0) {
-        gapSection = gaps.map(g => {
-            const emoji = g.severity === 'root_cause' ? '🔴' : g.severity === 'critical' ? '🟠' : g.severity === 'stale' ? '🔵' : '🟡';
-            return `- [${emoji} ${g.severity}] ${g.name}: ${Math.round((g.mastery || 0) * 100)}% mastery, ${g.questionsAnswered || 0} questions answered`;
-        }).join('\n');
+    if (gaps.length === 0) {
+        return `**Concept:** ${conceptName} (${masteryPct}% mastery, ${questionsAnswered} questions attempted)
+
+All prerequisites are mastered. The student needs help improving on this specific topic.
+
+Give insight on:
+- Common mistakes JEE students make on this topic
+- Specific problem-solving approaches that work
+- What types of questions to focus on (easy conceptual vs hard numerical)
+- How this topic typically appears in JEE Mains`;
     }
 
-    let pathSection = 'No specific study path recommended.';
-    if (studyPath.length > 0) {
-        pathSection = studyPath.map((s, i) =>
-            `${i + 1}. ${s.name} (${Math.round((s.mastery || 0) * 100)}% → target 80%) — ${s.reason || 'prerequisite gap'}`
-        ).join('\n');
-    }
+    const gapSection = gaps.slice(0, 8).map(g => {
+        const emoji = g.severity === 'root_cause' ? '🔴' : g.severity === 'critical' ? '🟠' : g.severity === 'stale' ? '🔵' : '🟡';
+        return `- ${emoji} ${g.name}: ${Math.round((g.mastery || 0) * 100)}%`;
+    }).join('\n');
 
-    return `**Target Concept:** ${conceptName} (${masteryPct}% mastery)
+    const pathSection = studyPath.slice(0, 5).map((s, i) =>
+        `${i + 1}. ${s.name} (${Math.round((s.mastery || 0) * 100)}%)`
+    ).join('\n');
 
-**Prerequisite Gaps (ordered by severity):**
+    return `**Concept:** ${conceptName} (${masteryPct}% mastery)
+
+**Gaps:**
 ${gapSection}
 
-**Recommended Study Path:**
+**Study order:**
 ${pathSection}
 
-${gaps.length === 0 ? 'All prerequisites are mastered. The student needs more practice on the target concept itself. Suggest varied problem-solving strategies and deeper conceptual understanding.' : ''}`;
+Explain WHY these gaps matter for ${conceptName} and what to do about it.`;
 }
 
 function buildChatSystemPrompt(masteryProfile, recentAttempts, gaps) {
@@ -200,7 +205,10 @@ export async function generateDiagnosis({ userId, conceptId }) {
         const masteryPct = Math.round(parseFloat(mastery.mastery) * 100);
 
         const systemPrompt = buildDiagnosisSystemPrompt();
-        const userPrompt = buildDiagnosisUserPrompt(conceptName, masteryPct, rawDiagnosis);
+        const userPrompt = buildDiagnosisUserPrompt(conceptName, masteryPct, {
+            ...rawDiagnosis,
+            questionsAnswered: parseInt(mastery.questions_answered) || 0
+        });
 
         const explanation = await geminiGenerate(systemPrompt, userPrompt, MODEL);
 
@@ -219,7 +227,7 @@ export async function generateDiagnosis({ userId, conceptId }) {
     }
 }
 
-export async function generateChatResponse({ userId, message, conversationHistory = [] }) {
+export async function generateChatResponse({ userId, message, conversationHistory = [], currentConcept = null, currentConceptId = null, currentQuestion = null }) {
     try {
         // Fetch full mastery profile
         const masteryRes = await db.query(`
@@ -256,6 +264,18 @@ export async function generateChatResponse({ userId, message, conversationHistor
 
         // Build conversation context for Gemini
         let userPrompt = '';
+
+        // Add current concept context if on practice page
+        if (currentConcept && currentConceptId) {
+            const conceptMastery = await getUserConceptMastery(userId, currentConceptId);
+            const conceptPct = Math.round(parseFloat(conceptMastery.mastery) * 100);
+            userPrompt += `[The student is currently practicing: ${currentConcept} (${conceptPct}% mastery, ${conceptMastery.questions_answered} questions answered)]\n`;
+            if (currentQuestion) {
+                userPrompt += `[Current question on screen:\n"${currentQuestion.text}"\nA) ${currentQuestion.option1}\nB) ${currentQuestion.option2}\nC) ${currentQuestion.option3}\nD) ${currentQuestion.option4}\nDifficulty: Tier ${currentQuestion.tier}]\n`;
+            }
+            userPrompt += '\n';
+        }
+
         if (conversationHistory.length > 0) {
             userPrompt += 'Previous conversation:\n';
             for (const msg of conversationHistory.slice(-10)) { // last 10 messages for context window

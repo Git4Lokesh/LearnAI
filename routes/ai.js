@@ -42,13 +42,20 @@ router.post('/api/ai/chat', ensureAuthenticated, aiRateLimiter, async (req, res)
         const { message } = req.body;
         if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
 
-        // Initialize or read chat history from session
         if (!req.session.aiChatHistory) req.session.aiChatHistory = [];
+
+        // Pass current concept context if available (from practice page)
+        const currentConcept = req.body.currentConcept || null;
+        const currentConceptId = req.body.currentConceptId || null;
+        const currentQuestion = req.body.currentQuestion || null;
 
         const result = await generateChatResponse({
             userId: req.user.id,
             message: message.trim(),
-            conversationHistory: req.session.aiChatHistory
+            conversationHistory: req.session.aiChatHistory,
+            currentConcept,
+            currentConceptId,
+            currentQuestion
         });
 
         // Append to session history

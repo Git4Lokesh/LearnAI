@@ -314,6 +314,12 @@ function renderQuestion() {
                 <span id="feedbackMsg"></span>
                 <div class="solution-text" id="solutionText"></div>
             </div>
+            <div id="aiActionsBar" style="display:none;margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-ai" id="btnAiHint" onclick="fetchAiHint(questions[currentIdx])" style="display:none"><i class="bi bi-lightbulb"></i> Get AI Hint</button>
+                <button class="btn-ai" id="btnAiDiagnose" onclick="fetchAiDiagnosis()"><i class="bi bi-search"></i> Why am I stuck?</button>
+            </div>
+            <div id="aiHintPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div></div>
+            <div id="aiDiagnosisPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-search"></i> AI Diagnosis</span></div><div class="ai-panel-body" id="aiDiagnosisContent"></div></div>
             <div class="stagnation-warning" id="stagnationWarn"></div>
         </div>
         <div class="actions">
@@ -373,19 +379,13 @@ async function submitAnswer() {
     document.getElementById('feedbackMsg').textContent = correct ? '✓ Correct!' : '✗ Incorrect';
     if (q.solution_text) document.getElementById('solutionText').textContent = q.solution_text;
 
-    // Show AI hint button on wrong answer
-    if (!correct) {
-        const hintBtn = document.createElement('button');
-        hintBtn.className = 'btn-ai';
-        hintBtn.innerHTML = '<i class="bi bi-lightbulb"></i> Get AI Hint';
-        hintBtn.onclick = () => fetchAiHint(q);
-        fb.appendChild(hintBtn);
-        const hintPanel = document.createElement('div');
-        hintPanel.id = 'aiHintPanel';
-        hintPanel.className = 'ai-panel';
-        hintPanel.style.display = 'none';
-        hintPanel.innerHTML = '<div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div>';
-        fb.parentNode.insertBefore(hintPanel, fb.nextSibling);
+    // Show AI actions bar after answering
+    const aiBar = document.getElementById('aiActionsBar');
+    if (aiBar) {
+        aiBar.style.display = 'flex';
+        // Show hint button on wrong answers
+        const hintBtn = document.getElementById('btnAiHint');
+        if (hintBtn) hintBtn.style.display = correct ? 'none' : 'inline-flex';
     }
 
     document.getElementById('btnSubmit').style.display = 'none';
@@ -425,19 +425,6 @@ async function submitAnswer() {
                 `<a href="/practice/${g.concept_id}" class="prereq-link">${g.name} (${Math.round(g.mastery*100)}%)</a>`
             ).join(', ');
             warn.innerHTML = `⚠️ <strong>Struggling with this concept?</strong><br>Consider reviewing these prerequisites first: ${gapsList}`;
-            // Add AI diagnosis button
-            const diagBtn = document.createElement('button');
-            diagBtn.className = 'btn-ai';
-            diagBtn.innerHTML = '<i class="bi bi-search"></i> Why am I stuck? (AI)';
-            diagBtn.style.marginTop = '10px';
-            diagBtn.onclick = () => fetchAiDiagnosis();
-            warn.appendChild(diagBtn);
-            const diagPanel = document.createElement('div');
-            diagPanel.id = 'aiDiagnosisPanel';
-            diagPanel.className = 'ai-panel';
-            diagPanel.style.display = 'none';
-            diagPanel.innerHTML = '<div class="ai-panel-header"><span><i class="bi bi-search"></i> AI Diagnosis</span></div><div class="ai-panel-body" id="aiDiagnosisContent"></div>';
-            warn.parentNode.insertBefore(diagPanel, warn.nextSibling);
         }
     } catch(e) { console.error(e); }
 
@@ -588,77 +575,6 @@ async function fetchAiDiagnosis() {
     }
 }
 
-// ── Floating Chat Widget ──
-(function initChatWidget() {
-    const widget = document.getElementById('chatWidgetPanel');
-    const toggle = document.getElementById('chatWidgetToggle');
-    const input = document.getElementById('chatWidgetInput');
-    const sendBtn = document.getElementById('chatWidgetSend');
-    const messages = document.getElementById('chatWidgetMessages');
-    if (!toggle) return;
-
-    toggle.onclick = () => {
-        widget.classList.toggle('open');
-        if (widget.classList.contains('open') && messages.children.length === 0) {
-            addChatMsg('assistant', 'Hi! I\'m your AI study tutor. I know your mastery levels across all subjects. Ask me anything — what to study next, why you\'re stuck, or explain a concept!');
-        }
-    };
-
-    function addChatMsg(role, text) {
-        const div = document.createElement('div');
-        div.className = 'chat-msg ' + role;
-        if (role === 'assistant') {
-            typewriterRender(div, text);
-        } else {
-            div.textContent = text;
-        }
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
-    }
-
-    function showTyping() {
-        const div = document.createElement('div');
-        div.className = 'chat-typing';
-        div.id = 'chatTypingIndicator';
-        div.innerHTML = '<div class="chat-typing-dots"><span></span><span></span><span></span></div>';
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
-    }
-
-    function removeTyping() {
-        const el = document.getElementById('chatTypingIndicator');
-        if (el) el.remove();
-    }
-
-    async function sendMessage() {
-        const msg = input.value.trim();
-        if (!msg) return;
-        input.value = '';
-        addChatMsg('user', msg);
-        showTyping();
-        try {
-            const res = await fetch('/api/ai/chat', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg })
-            });
-            removeTyping();
-            if (res.status === 429) {
-                addChatMsg('assistant', 'Daily AI limit reached. Try again tomorrow!');
-                return;
-            }
-            const data = await res.json();
-            addChatMsg('assistant', data.response || 'Sorry, I couldn\'t respond.');
-        } catch(e) {
-            removeTyping();
-            addChatMsg('assistant', 'Something went wrong. Please try again.');
-        }
-    }
-
-    sendBtn.onclick = sendMessage;
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
-})();
 </script>
 <!-- Floating Chat Widget -->
 <div class="chat-widget">
@@ -675,5 +591,73 @@ async function fetchAiDiagnosis() {
         </div>
     </div>
 </div>
+<script>
+// Chat widget init — must run after widget HTML is in DOM
+(function() {
+    const widget = document.getElementById('chatWidgetPanel');
+    const toggle = document.getElementById('chatWidgetToggle');
+    const input = document.getElementById('chatWidgetInput');
+    const sendBtn = document.getElementById('chatWidgetSend');
+    const messages = document.getElementById('chatWidgetMessages');
+    if (!toggle || !widget) return;
+
+    toggle.addEventListener('click', function() {
+        widget.classList.toggle('open');
+        if (widget.classList.contains('open') && messages.children.length === 0) {
+            const welcome = document.createElement('div');
+            welcome.className = 'chat-msg assistant';
+            welcome.innerHTML = marked.parse("Hi! I'm your **AI study tutor**. I know your mastery levels across all subjects. Ask me anything — what to study next, why you're stuck, or explain a concept!");
+            messages.appendChild(welcome);
+        }
+        if (widget.classList.contains('open')) input.focus();
+    });
+
+    function addMsg(role, text) {
+        const div = document.createElement('div');
+        div.className = 'chat-msg ' + role;
+        if (role === 'assistant') {
+            typewriterRender(div, text);
+        } else {
+            div.textContent = text;
+        }
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function send() {
+        const msg = input.value.trim();
+        if (!msg) return;
+        input.value = '';
+        addMsg('user', msg);
+        // typing indicator
+        const typing = document.createElement('div');
+        typing.className = 'chat-typing';
+        typing.id = 'chatTyping';
+        typing.innerHTML = '<div class="chat-typing-dots"><span></span><span></span><span></span></div>';
+        messages.appendChild(typing);
+        messages.scrollTop = messages.scrollHeight;
+        try {
+            const res = await fetch('/api/ai/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg, currentConcept: '<%= concept.name %>', currentConceptId: conceptId, currentQuestion: questions[currentIdx] ? { text: questions[currentIdx].question_text, option1: questions[currentIdx].option1, option2: questions[currentIdx].option2, option3: questions[currentIdx].option3, option4: questions[currentIdx].option4, tier: questions[currentIdx].difficulty_tier } : null })
+            });
+            const el = document.getElementById('chatTyping');
+            if (el) el.remove();
+            if (res.status === 429) { addMsg('assistant', 'Daily AI limit reached. Try again tomorrow!'); return; }
+            const data = await res.json();
+            addMsg('assistant', data.response || 'Sorry, I couldn\'t respond.');
+        } catch(e) {
+            const el = document.getElementById('chatTyping');
+            if (el) el.remove();
+            addMsg('assistant', 'Something went wrong. Please try again.');
+        }
+    }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+})();
+</script>
 </body>
 </html>
