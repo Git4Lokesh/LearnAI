@@ -546,10 +546,8 @@ async function fetchAiHint(q) {
         const res = await fetch('/api/ai/hint', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                questionText: q.question_text, option1: q.option1, option2: q.option2,
-                option3: q.option3, option4: q.option4,
-                correctAnswer: '', selectedAnswer: '',
-                conceptId, conceptName: '<%= concept.name %>'
+                questionId: q.id,
+                mode: 'hint'
             })
         });
         if (res.status === 429) {
@@ -575,10 +573,9 @@ async function fetchAiAdvice() {
         const res = await fetch('/api/ai/hint', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                questionText: q.question_text, option1: q.option1, option2: q.option2,
-                option3: q.option3, option4: q.option4, correctAnswer: q.correct_answer,
+                questionId: q.id,
+                mode: 'diagnose_mistake',
                 selectedAnswer: selectedOpt,
-                conceptId, conceptName: '<%= concept.name %>'
             })
         });
         if (res.status === 429) {

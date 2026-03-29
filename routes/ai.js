@@ -2,19 +2,56 @@ import express from 'express';
 import { ensureAuthenticated } from '../middleware/auth.js';
 import { aiRateLimiter } from '../middleware/aiRateLimit.js';
 import { generateHint, generateDiagnosis, generateChatResponse } from '../services/aiTutorService.js';
+import db from '../config/db.js';
 
 const router = express.Router();
 
 // POST /api/ai/hint — BKT-aware personalized hint on wrong answer
 router.post('/api/ai/hint', ensureAuthenticated, aiRateLimiter, async (req, res) => {
     try {
-        const { questionText, option1, option2, option3, option4, correctAnswer, selectedAnswer, conceptId, conceptName } = req.body;
-        if (!questionText || !option1 || !option2 || !option3 || !option4 || !conceptId || !conceptName) {
-            return res.status(400).json({ error: 'Missing required fields' });
+        const questionId = parseInt(req.body.questionId, 10);
+        const mode = ['hint', 'diagnose_mistake', 'reveal'].includes(req.body.mode) ? req.body.mode : 'hint';
+        const selectedAnswer = /^option[1-4]$/.test(req.body.selectedAnswer || '') ? req.body.selectedAnswer : null;
+
+        if (!questionId) {
+            return res.status(400).json({ error: 'questionId is required' });
         }
+
+        const questionRes = await db.query(
+            `
+            SELECT q.id, q.question_text, q.option1, q.option2, q.option3, q.option4, q.correct_answer,
+                   q.concept_id, q.institute_id, c.name AS concept_name
+            FROM questions q
+            LEFT JOIN concepts c ON c.id = q.concept_id
+            WHERE q.id = $1 AND q.status = 'approved'
+            `,
+            [questionId]
+        );
+        const question = questionRes.rows[0];
+        if (!question || !question.concept_id) {
+            return res.status(404).json({ error: 'Question not found' });
+        }
+
+        // Keep institute question visibility enforcement server-side
+        if (req.user.institute_id && question.institute_id && Number(question.institute_id) !== Number(req.user.institute_id)) {
+            return res.status(403).json({ error: 'Question not accessible' });
+        }
+
         const result = await generateHint({
-            userId: req.user.id, questionText, option1, option2, option3, option4,
-            correctAnswer, selectedAnswer, conceptId, conceptName
+            userId: req.user.id,
+            mode,
+            selectedAnswer,
+            question: {
+                id: question.id,
+                questionText: question.question_text,
+                option1: question.option1,
+                option2: question.option2,
+                option3: question.option3,
+                option4: question.option4,
+                correctAnswer: question.correct_answer,
+                conceptId: question.concept_id,
+                conceptName: question.concept_name || 'Unknown concept'
+            }
         });
         res.json(result);
     } catch (e) {
