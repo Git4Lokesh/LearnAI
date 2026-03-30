@@ -327,13 +327,11 @@ function renderQuestion() {
             <div class="ai-tutor-header"><i class="bi bi-robot"></i> AI Tutor</div>
             <div class="ai-tutor-buttons">
                 <button class="btn-ai" id="btnAiHint" onclick="fetchAiHint(questions[currentIdx])"><i class="bi bi-lightbulb"></i> Hint</button>
-                <button class="btn-ai btn-ai-advice" id="btnAiAdvice" onclick="fetchAiAdvice()" style="display:none"><i class="bi bi-chat-dots"></i> Advice</button>
-                <button class="btn-ai" id="btnAiDiagnose" onclick="fetchAiDiagnosis()"><i class="bi bi-search"></i> Diagnose</button>
+                <button class="btn-ai btn-ai-advice" id="btnAiAdvice" onclick="fetchAiAdvice()" style="display:none"><i class="bi bi-compass"></i> Advice</button>
                 <button class="btn-ai" onclick="document.getElementById('chatWidgetPanel').classList.add('open')"><i class="bi bi-chat-left-text"></i> Chat</button>
             </div>
             <div id="aiHintPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div></div>
-            <div id="aiAdvicePanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-chat-dots"></i> AI Advice</span></div><div class="ai-panel-body" id="aiAdviceContent"></div></div>
-            <div id="aiDiagnosisPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-search"></i> AI Diagnosis</span></div><div class="ai-panel-body" id="aiDiagnosisContent"></div></div>
+            <div id="aiAdvicePanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-compass"></i> AI Advice</span></div><div class="ai-panel-body" id="aiAdviceContent"></div></div>
         </div>
         <div class="actions">
             <button class="btn-submit" id="btnSubmit" onclick="submitAnswer()" disabled>Submit</button>
@@ -567,34 +565,6 @@ async function fetchAiAdvice() {
     if (!panel || !content) return;
     panel.style.display = 'block';
     showAiLoader(content);
-    const q = questions[currentIdx];
-    const selectedOpt = document.querySelector('.option-label.wrong')?.dataset.opt || document.querySelector('.option-label.selected')?.dataset.opt || '';
-    try {
-        const res = await fetch('/api/ai/hint', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                questionId: q.id,
-                mode: 'diagnose_mistake',
-                selectedAnswer: selectedOpt,
-            })
-        });
-        if (res.status === 429) {
-            content.innerHTML = '<p style="color:var(--gold)">Daily AI limit reached. Try again tomorrow!</p>';
-            return;
-        }
-        const data = await res.json();
-        typewriterRender(content, data.hint || 'Could not generate advice.');
-    } catch(e) {
-        content.innerHTML = '<p style="color:var(--text-muted)">Advice unavailable right now.</p>';
-    }
-}
-
-async function fetchAiDiagnosis() {
-    const panel = document.getElementById('aiDiagnosisPanel');
-    const content = document.getElementById('aiDiagnosisContent');
-    if (!panel || !content) return;
-    panel.style.display = 'block';
-    showAiLoader(content);
     try {
         const res = await fetch('/api/ai/diagnose', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -605,11 +575,12 @@ async function fetchAiDiagnosis() {
             return;
         }
         const data = await res.json();
-        typewriterRender(content, data.explanation || 'Could not generate diagnosis.');
+        typewriterRender(content, data.explanation || 'Could not generate advice.');
     } catch(e) {
-        content.innerHTML = '<p style="color:var(--text-muted)">Diagnosis unavailable right now.</p>';
+        content.innerHTML = '<p style="color:var(--text-muted)">Advice unavailable right now.</p>';
     }
 }
+
 
 </script>
 <!-- Floating Chat Widget -->
