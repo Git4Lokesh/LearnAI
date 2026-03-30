@@ -11,7 +11,46 @@
         tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']], processEscapes: true },
         options: { renderActions: { addMenu: [] } }
     };
-    </script>
+    
+var conceptName2 = '<%- concept.name %>';
+async function sendSidebarChat(text) {
+    if (!text || !text.trim()) return;
+    var chat = document.getElementById('sidebarChat');
+    var ud = document.createElement('div');
+    ud.style.cssText = 'align-self:flex-end;background:var(--purple);color:white;padding:6px 10px;border-radius:10px;font-size:0.78rem;max-width:85%';
+    ud.textContent = text;
+    chat.appendChild(ud); chat.scrollTop = chat.scrollHeight;
+    var tp = document.createElement('div');
+    tp.id = 'chatTyping'; tp.style.cssText = 'font-size:0.75rem;color:var(--text-dim);padding:4px 10px;font-style:italic';
+    tp.textContent = 'Thinking...'; chat.appendChild(tp); chat.scrollTop = chat.scrollHeight;
+    var q = questions[currentIdx];
+    try {
+        var r = await fetch('/api/ai/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({message:text, currentConcept:conceptName2, currentConceptId:conceptId,
+                currentQuestion: q ? {text:q.question_text,option1:q.option1,option2:q.option2,option3:q.option3,option4:q.option4,tier:q.difficulty_tier} : null})});
+        tp.remove();
+        if(r.status===429){addBotMsg2(chat,'Daily AI limit reached.');return}
+        var d = await r.json(); addBotMsg2(chat, d.response || 'Could not respond.');
+    } catch(e) { tp.remove(); addBotMsg2(chat,'Something went wrong.'); }
+}
+function addBotMsg2(chat, text) {
+    var d = document.createElement('div');
+    d.style.cssText = 'background:var(--card);border:1px solid var(--border);padding:8px 10px;border-radius:10px;font-size:0.78rem;color:var(--text-secondary);line-height:1.5;max-width:92%';
+    typewriterRender(d, text); chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+}
+function requestExplain() {
+    var w = document.querySelector('.option-label.wrong');
+    var t = w ? w.querySelector('.option-text').textContent : 'my answer';
+    sendSidebarChat('I chose ' + t + ' and got it wrong. Explain why and help me understand.');
+}
+document.getElementById('sidebarChatSend').addEventListener('click', function() {
+    var inp = document.getElementById('sidebarChatInput');
+    sendSidebarChat(inp.value); inp.value = '';
+});
+document.getElementById('sidebarChatInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendSidebarChat(this.value); this.value = ''; }
+});
+</script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="/css/theme.css">
