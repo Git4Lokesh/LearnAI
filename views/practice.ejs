@@ -199,3 +199,96 @@ nav.practice-nav{background:rgba(17,24,39,.8);border-bottom:1px solid rgba(255,2
     </div>
 </div>
 <% } %>
+
+<script>
+const questions = <%- JSON.stringify(questions) %>;
+const conceptId = '<%= concept.id %>';
+let currentIdx = 0, currentMastery = <%= mastery %>, answered = false, questionStartTime = Date.now(), sessionCorrect = 0, sessionTotal = 0;
+const initialMastery = <%= mastery %>, seenIds = new Set();
+let prevTier = null;
+const keys = ['A','B','C','D'], optKeys = ['option1','option2','option3','option4'];
+
+function showTierToast(o,n){if(o===null||o===n)return;const t=document.getElementById('tierToast');t.className='tier-toast '+(n>o?'up':'down');t.textContent=n>o?'\u2b06 Difficulty increased':'\u2b07 Difficulty decreased';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+
+function renderQuestion(){
+    if(currentIdx>=questions.length){showSessionSummary();return}
+    const q=questions[currentIdx];answered=false;questionStartTime=Date.now();seenIds.add(q.id);
+    showTierToast(prevTier,q.difficulty_tier);prevTier=q.difficulty_tier;
+    const tierLabel=['','Easy','Medium','Hard'][q.difficulty_tier]||'';
+    const tierClass=['','tier-1','tier-2','tier-3'][q.difficulty_tier]||'tier-2';
+    const optHtml=optKeys.map((ok,i)=>`<label class="option-label" data-opt="${ok}" onclick="selectOption(this)"><input type="radio" name="answer" value="${ok}"><div class="option-key">${keys[i]}</div><div class="option-text">${q[ok]}</div></label>`).join('');
+    document.getElementById('questionArea').innerHTML=`
+        <div class="q-card">
+            <div class="q-top"><div class="q-top-left"><span class="tier-badge ${tierClass}">${tierLabel}</span><span class="q-num">Q${currentIdx+1} of ${questions.length}</span></div>
+            <button class="hint-btn" onclick="requestHint()" title="Get AI Hint"><i class="bi bi-lightbulb-fill"></i></button></div>
+            <div class="question-text">${q.question_text}</div>
+            <div class="options">${optHtml}</div>
+            <div class="feedback" id="feedback"><span id="feedbackMsg"></span><div class="solution-text" id="solutionText"></div></div>
+            <button class="explain-btn" id="explainBtn" onclick="requestExplain()"><i class="bi bi-chat-dots"></i> Explain why I'm wrong</button>
+            <div class="stagnation-warning" id="stagnationWarn"></div>
+        </div>
+        <div class="actions"><button class="btn-submit" id="btnSubmit" onclick="submitAnswer()" disabled>Submit</button><button class="btn-next" id="btnNext" onclick="nextQuestion()">Next <i class="bi bi-arrow-right ms-1"></i></button></div>`;
+    if(window.MathJax)MathJax.typesetPromise();
+}
+
+function showSessionSummary(){
+    const acc=sessionTotal>0?Math.round((sessionCorrect/sessionTotal)*100):0;
+    const gain=Math.round((currentMastery-initialMastery)*100);
+    document.getElementById('questionArea').innerHTML=`<div class="session-summary"><h3>Session Complete</h3><div class="summary-stats"><div class="stat"><span class="stat-val" style="color:#10B981">${sessionCorrect}</span><span class="stat-label">Correct</span></div><div class="stat"><span class="stat-val" style="color:#EF4444">${sessionTotal-sessionCorrect}</span><span class="stat-label">Wrong</span></div><div class="stat"><span class="stat-val">${acc}%</span><span class="stat-label">Accuracy</span></div></div><div class="mastery-delta">Mastery: ${Math.round(initialMastery*100)}% \u2192 <strong style="color:${gain>=0?'#10B981':'#EF4444'}">${Math.round(currentMastery*100)}%</strong> (${gain>=0?'+':''}${gain}%)</div><a href="/" class="btn-submit" style="display:inline-block;text-decoration:none">Back to Graph</a></div>`;
+}
+
+function selectOption(el){if(answered)return;document.querySelectorAll('.option-label').forEach(l=>l.classList.remove('selected'));el.classList.add('selected');document.getElementById('btnSubmit').disabled=false}
+
+async function submitAnswer(){
+    if(answered)return;answered=true;
+    const sel=document.querySelector('.option-label.selected');if(!sel)return;
+    const chosen=sel.dataset.opt,q=questions[currentIdx],correct=chosen===q.correct_answer;
+    sessionTotal++;if(correct)sessionCorrect++;
+    const timeTaken=(Date.now()-questionStartTime)/1000;
+    document.querySelectorAll('.option-label').forEach(l=>{if(l.dataset.opt===q.correct_answer)l.classList.add('correct');else if(l.dataset.opt===chosen&&!correct)l.classList.add('wrong')});
+    const fb=document.getElementById('feedback');fb.className='feedback '+(correct?'correct':'wrong');fb.style.display='block';
+    document.getElementById('feedbackMsg').textContent=correct?'\u2713 Correct!':'\u2717 Incorrect';
+    if(q.solution_text)document.getElementById('solutionText').textContent=q.solution_text;
+    if(!correct){const eb=document.getElementById('explainBtn');if(eb)eb.style.display='inline-block'}
+    document.getElementById('btnSubmit').style.display='none';document.getElementById('btnNext').style.display='block';
+    try{
+        const res=await fetch('/practice/'+conceptId+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correct:correct,question_id:q.id,difficulty_tier:q.difficulty_tier,time_taken_seconds:timeTaken})});
+        const data=await res.json();
+        if(data.mastery!==undefined){const om=currentMastery;currentMastery=data.mastery;updateMasteryBar(data.mastery);
+            const ot=om<0.4?1:om<0.7?2:3,nt=currentMastery<0.4?1:currentMastery<0.7?2:3;
+            if(nt>ot){const nq=await fetchAdaptiveQuestions(nt);if(nq&&nq.length>0){questions.splice(currentIdx+1,questions.length-currentIdx-1,...nq);showTierToast(ot,nt)}}
+            if(data.mastery>=0.8)document.getElementById('masteredBanner').style.display='block'}
+        if(data.stagnating&&data.prerequisiteGaps&&data.prerequisiteGaps.length>0){const w=document.getElementById('stagnationWarn');w.style.display='block';w.innerHTML='\u26a0\ufe0f <strong>Struggling?</strong> Review: '+data.prerequisiteGaps.map(function(g){return '<a href="/practice/'+g.concept_id+'" style="color:#F59E0B;font-weight:600">'+g.name+' ('+Math.round(g.mastery*100)+'%)</a>'}).join(', ')}
+    }catch(e){console.error(e)}
+    if(window.MathJax)MathJax.typesetPromise();
+}
+
+async function fetchAdaptiveQuestions(tier){try{const r=await fetch('/api/adaptive-questions/'+conceptId+'?tier='+tier);const d=await r.json();return d.questions?d.questions.filter(function(q){return !seenIds.has(q.id)}):[];}catch(e){return[]}}
+
+function updateMasteryBar(m){var p=Math.round(m*100),f=document.getElementById('masteryFill'),pe=document.getElementById('masteryPct');var bg,c;if(m>=0.6){bg='linear-gradient(90deg,#10B981,#F59E0B,#EF4444)';c='#EF4444'}else if(m>=0.33){bg='linear-gradient(90deg,#10B981,#F59E0B)';c='#F59E0B'}else{bg='#10B981';c='#10B981'}f.style.width=p+'%';f.style.background=bg;pe.textContent=p+'%';pe.style.color=c}
+
+function nextQuestion(){currentIdx++;if(currentIdx>=questions.length){showSessionSummary();return}renderQuestion()}
+
+// AI Chat
+var aiMsgs=document.getElementById('aiChatMessages'),aiIn=document.getElementById('aiChatInput');
+function addMsg(role,text){var d=document.createElement('div');d.className='chat-msg '+(role==='user'?'user':'assistant');if(role!=='user'){typewriterRender(d,text)}else{d.textContent=text}aiMsgs.appendChild(d);aiMsgs.scrollTop=aiMsgs.scrollHeight}
+function showTyping(){var d=document.createElement('div');d.className='chat-typing';d.id='aiTyp';d.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';aiMsgs.appendChild(d);aiMsgs.scrollTop=aiMsgs.scrollHeight}
+function rmTyping(){var e=document.getElementById('aiTyp');if(e)e.remove()}
+
+async function sendChat(text){if(!text.trim())return;addMsg('user',text);showTyping();var q=questions[currentIdx];
+try{var r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,currentConcept:'<%- concept.name %>',currentConceptId:conceptId,currentQuestion:q?{text:q.question_text,option1:q.option1,option2:q.option2,option3:q.option3,option4:q.option4,tier:q.difficulty_tier}:null})});rmTyping();if(r.status===429){addMsg('assistant','Daily AI limit reached.');return}var d=await r.json();addMsg('assistant',d.response||'Sorry, could not respond.')}catch(e){rmTyping();addMsg('assistant','Something went wrong.')}}
+
+function requestHint(){sendChat('Give me a hint for this question. Do not reveal the answer.')}
+function requestExplain(){var w=document.querySelector('.option-label.wrong');var t=w?w.querySelector('.option-text').textContent:'my answer';sendChat('I chose "'+t+'" and got it wrong. Explain why and help me understand.')}
+
+function typewriterRender(el,text,cb){var i=0;el.innerHTML='';function f(){if(i<text.length){i=Math.min(i+18,text.length);el.innerHTML=marked.parse(text.substring(0,i));requestAnimationFrame(f)}else{el.innerHTML=marked.parse(text);if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([el]);if(cb)cb()}}requestAnimationFrame(f)}
+
+function toggleMobileAi(){document.getElementById('aiTutorPanel').classList.toggle('mobile-open')}
+
+document.getElementById('aiChatSend').addEventListener('click',function(){sendChat(aiIn.value);aiIn.value=''});
+aiIn.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat(aiIn.value);aiIn.value=''}});
+
+renderQuestion();
+</script>
+</body>
+</html>
