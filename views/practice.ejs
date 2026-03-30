@@ -139,19 +139,38 @@
             .actions { flex-direction: column; }
             .summary-stats { flex-direction: column; gap: 1rem; }
         }
-        /* AI Tutor Section */
-        .ai-tutor-section { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.15); border-radius: 14px; margin-bottom: 1rem; backdrop-filter: blur(12px); overflow: hidden; }
-        .ai-tutor-header { font-size: 0.75rem; font-weight: 600; color: var(--purple-light); text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 16px 0; display: flex; align-items: center; gap: 6px; }
-        .ai-tutor-buttons { display: flex; gap: 0; border-bottom: 1px solid rgba(124,58,237,0.15); }
-        .ai-tutor-buttons .btn-ai { border-radius: 0; border: none; border-bottom: 2px solid transparent; flex: 1; justify-content: center; margin: 0; padding: 10px 8px; font-size: 0.75rem; background: none; color: var(--text-muted); }
-        .ai-tutor-buttons .btn-ai:hover { background: rgba(124,58,237,0.05); color: var(--text-secondary); transform: none; }
-        .ai-tutor-buttons .btn-ai.active { border-bottom-color: var(--purple); color: var(--purple-light); background: rgba(124,58,237,0.08); }
-        .ai-tutor-buttons .btn-ai-advice { color: var(--text-muted); }
-        .ai-tutor-buttons .btn-ai-advice:hover { color: var(--red-light); }
-        .ai-tutor-buttons .btn-ai-advice.active { color: var(--red-light); border-bottom-color: var(--red); }
-        .ai-carousel { position: relative; min-height: 60px; max-height: 300px; overflow-y: auto; }
-        .ai-carousel .ai-panel { display: none; }
-        .ai-carousel .ai-panel.active { display: block; }
+        /* AI Tutor Sidebar — fixed left */
+        .ai-sidebar { position: fixed; left: 20px; top: 72px; width: 280px; height: calc(100vh - 88px); z-index: 8; display: flex; flex-direction: column; }
+        .ai-sidebar-inner { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.12); border-radius: 16px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow-md); display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .ai-sidebar-header { padding: 14px 16px 10px; display: flex; align-items: center; gap: 8px; }
+        .ai-sidebar-header .ai-logo { width: 28px; height: 28px; border-radius: 8px; background: var(--gradient-purple); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+        .ai-sidebar-header .ai-title { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); }
+        .ai-sidebar-header .ai-subtitle { font-size: 0.62rem; color: var(--text-dim); }
+        .ai-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
+        .ai-tab { flex: 1; padding: 10px 6px; text-align: center; font-size: 0.7rem; font-weight: 600; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .ai-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.02); }
+        .ai-tab.active { color: var(--purple-light); border-bottom-color: var(--purple); background: rgba(124,58,237,0.06); }
+        .ai-tab.tab-advice { display: none; }
+        .ai-tab.tab-advice.visible { display: flex; }
+        .ai-tab.tab-advice.active { color: var(--red-light); border-bottom-color: var(--red); }
+        .ai-content { flex: 1; overflow-y: auto; position: relative; }
+        .ai-content-panel { display: none; padding: 14px 16px; font-size: 0.85rem; line-height: 1.7; color: var(--text-secondary); }
+        .ai-content-panel.active { display: block; }
+        .ai-content-panel h1,.ai-content-panel h2,.ai-content-panel h3 { color: var(--gold); margin: 0.75rem 0 0.4rem; font-size: 0.92rem; }
+        .ai-content-panel ul,.ai-content-panel ol { padding-left: 1.1rem; margin: 0.4rem 0; }
+        .ai-content-panel strong { color: var(--text-primary); }
+        .ai-content-panel p { margin: 0.4rem 0; }
+        .ai-empty { color: var(--text-dim); font-size: 0.8rem; text-align: center; padding: 2rem 1rem; }
+        .ai-empty i { font-size: 1.5rem; display: block; margin-bottom: 8px; color: var(--purple-light); opacity: 0.5; }
+        .ai-chat-btn { margin: 0 12px 12px; padding: 10px; border-radius: 10px; background: var(--gradient-purple); border: none; color: white; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; flex-shrink: 0; }
+        .ai-chat-btn:hover { opacity: 0.9; box-shadow: 0 4px 16px rgba(124,58,237,0.3); }
+
+        @media (max-width: 1100px) {
+            .ai-sidebar { display: none; }
+        }
+
+        /* Remove old inline AI styles */
+        .ai-tutor-section { display: none; }
 
         /* AI Panels */
         .ai-panel { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.2); border-radius: 12px; margin-top: 1rem; overflow: hidden; backdrop-filter: blur(12px); }
@@ -617,6 +636,96 @@ async function fetchAiAdvice() {
 }
 
 
+</script>
+<!-- AI Tutor Sidebar -->
+<div class="ai-sidebar" id="aiSidebar">
+    <div class="ai-sidebar-inner">
+        <div class="ai-sidebar-header">
+            <div class="ai-logo"><i class="bi bi-robot"></i></div>
+            <div><div class="ai-title">AI Tutor</div><div class="ai-subtitle">Powered by your mastery data</div></div>
+        </div>
+        <div class="ai-tabs">
+            <div class="ai-tab active" data-tab="hint" onclick="switchAiSidebarTab(this,'hint')"><i class="bi bi-lightbulb"></i> Hint</div>
+            <div class="ai-tab tab-advice" id="sidebarAdviceTab" data-tab="advice" onclick="switchAiSidebarTab(this,'advice')"><i class="bi bi-compass"></i> Advice</div>
+        </div>
+        <div class="ai-content">
+            <div class="ai-content-panel active" id="sidebarHint">
+                <div class="ai-empty"><i class="bi bi-lightbulb"></i>Click here or press <b>Hint</b> to get a nudge on the current question</div>
+            </div>
+            <div class="ai-content-panel" id="sidebarAdvice">
+                <div class="ai-empty"><i class="bi bi-compass"></i>Advice appears here after a wrong answer</div>
+            </div>
+        </div>
+        <button class="ai-chat-btn" onclick="document.getElementById('chatWidgetPanel').classList.add('open')"><i class="bi bi-chat-left-text"></i> Open AI Chat</button>
+    </div>
+</div>
+<script>
+function switchAiSidebarTab(el, tab) {
+    document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ai-content-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    const panel = document.getElementById(tab === 'hint' ? 'sidebarHint' : 'sidebarAdvice');
+    if (panel) panel.classList.add('active');
+    if (tab === 'hint' && !panel.dataset.loaded) {
+        fetchAiHintSidebar();
+        panel.dataset.loaded = '1';
+    }
+    if (tab === 'advice' && !panel.dataset.loaded) {
+        fetchAiAdviceSidebar();
+        panel.dataset.loaded = '1';
+    }
+}
+async function fetchAiHintSidebar() {
+    const content = document.getElementById('sidebarHint');
+    if (!content) return;
+    showAiLoader(content);
+    const q = questions[currentIdx];
+    if (!q) return;
+    try {
+        const res = await fetch('/api/ai/hint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questionId: q.id, mode: 'hint' }) });
+        if (res.status === 429) { content.innerHTML = '<p style="color:var(--gold);padding:1rem;text-align:center">Daily AI limit reached.</p>'; return; }
+        const data = await res.json();
+        typewriterRender(content, data.hint || 'Could not generate hint.');
+    } catch(e) { content.innerHTML = '<p style="color:var(--text-dim);padding:1rem">Hint unavailable.</p>'; }
+}
+async function fetchAiAdviceSidebar() {
+    const content = document.getElementById('sidebarAdvice');
+    if (!content) return;
+    showAiLoader(content);
+    try {
+        const res = await fetch('/api/ai/diagnose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conceptId }) });
+        if (res.status === 429) { content.innerHTML = '<p style="color:var(--gold);padding:1rem;text-align:center">Daily AI limit reached.</p>'; return; }
+        const data = await res.json();
+        typewriterRender(content, data.explanation || 'Could not generate advice.');
+    } catch(e) { content.innerHTML = '<p style="color:var(--text-dim);padding:1rem">Advice unavailable.</p>'; }
+}
+// Reset sidebar on new question
+const origRenderQuestion = renderQuestion;
+renderQuestion = function() {
+    origRenderQuestion();
+    const hintPanel = document.getElementById('sidebarHint');
+    const advicePanel = document.getElementById('sidebarAdvice');
+    if (hintPanel) { hintPanel.dataset.loaded = ''; hintPanel.innerHTML = '<div class="ai-empty"><i class="bi bi-lightbulb"></i>Click <b>Hint</b> for a nudge on this question</div>'; }
+    if (advicePanel) { advicePanel.dataset.loaded = ''; advicePanel.innerHTML = '<div class="ai-empty"><i class="bi bi-compass"></i>Advice appears after a wrong answer</div>'; }
+    const adviceTab = document.getElementById('sidebarAdviceTab');
+    if (adviceTab) adviceTab.classList.remove('visible');
+    // Reset to hint tab
+    document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ai-content-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.ai-tab[data-tab="hint"]')?.classList.add('active');
+    if (hintPanel) hintPanel.classList.add('active');
+};
+// Show advice tab on wrong answer — hook into submitAnswer
+const origSubmitAnswer = submitAnswer;
+submitAnswer = async function() {
+    await origSubmitAnswer();
+    // After submit, check if wrong
+    const adviceTab = document.getElementById('sidebarAdviceTab');
+    if (adviceTab && document.querySelector('.option-label.wrong')) {
+        adviceTab.classList.add('visible');
+        switchAiSidebarTab(adviceTab, 'advice');
+    }
+};
 </script>
 <!-- Floating Chat Widget -->
 <div class="chat-widget">
