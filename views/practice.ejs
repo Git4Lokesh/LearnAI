@@ -140,9 +140,18 @@
             .summary-stats { flex-direction: column; gap: 1rem; }
         }
         /* AI Tutor Section */
-        .ai-tutor-section { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.15); border-radius: 14px; padding: 14px 16px; margin-bottom: 1rem; backdrop-filter: blur(12px); }
-        .ai-tutor-header { font-size: 0.75rem; font-weight: 600; color: var(--purple-light); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-        .ai-tutor-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ai-tutor-section { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.15); border-radius: 14px; margin-bottom: 1rem; backdrop-filter: blur(12px); overflow: hidden; }
+        .ai-tutor-header { font-size: 0.75rem; font-weight: 600; color: var(--purple-light); text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 16px 0; display: flex; align-items: center; gap: 6px; }
+        .ai-tutor-buttons { display: flex; gap: 0; border-bottom: 1px solid rgba(124,58,237,0.15); }
+        .ai-tutor-buttons .btn-ai { border-radius: 0; border: none; border-bottom: 2px solid transparent; flex: 1; justify-content: center; margin: 0; padding: 10px 8px; font-size: 0.75rem; background: none; color: var(--text-muted); }
+        .ai-tutor-buttons .btn-ai:hover { background: rgba(124,58,237,0.05); color: var(--text-secondary); transform: none; }
+        .ai-tutor-buttons .btn-ai.active { border-bottom-color: var(--purple); color: var(--purple-light); background: rgba(124,58,237,0.08); }
+        .ai-tutor-buttons .btn-ai-advice { color: var(--text-muted); }
+        .ai-tutor-buttons .btn-ai-advice:hover { color: var(--red-light); }
+        .ai-tutor-buttons .btn-ai-advice.active { color: var(--red-light); border-bottom-color: var(--red); }
+        .ai-carousel { position: relative; min-height: 60px; max-height: 300px; overflow-y: auto; }
+        .ai-carousel .ai-panel { display: none; }
+        .ai-carousel .ai-panel.active { display: block; }
 
         /* AI Panels */
         .ai-panel { background: var(--glass-bg); border: 1px solid rgba(124,58,237,0.2); border-radius: 12px; margin-top: 1rem; overflow: hidden; backdrop-filter: blur(12px); }
@@ -326,12 +335,14 @@ function renderQuestion() {
         <div class="ai-tutor-section">
             <div class="ai-tutor-header"><i class="bi bi-robot"></i> AI Tutor</div>
             <div class="ai-tutor-buttons">
-                <button class="btn-ai" id="btnAiHint" onclick="fetchAiHint(questions[currentIdx])"><i class="bi bi-lightbulb"></i> Hint</button>
-                <button class="btn-ai btn-ai-advice" id="btnAiAdvice" onclick="fetchAiAdvice()" style="display:none"><i class="bi bi-compass"></i> Advice</button>
+                <button class="btn-ai" data-panel="aiHintPanel" onclick="showAiTab(this,'aiHintPanel')"><i class="bi bi-lightbulb"></i> Hint</button>
+                <button class="btn-ai btn-ai-advice" id="btnAiAdvice" data-panel="aiAdvicePanel" onclick="showAiTab(this,'aiAdvicePanel')" style="display:none"><i class="bi bi-compass"></i> Advice</button>
                 <button class="btn-ai" onclick="document.getElementById('chatWidgetPanel').classList.add('open')"><i class="bi bi-chat-left-text"></i> Chat</button>
             </div>
-            <div id="aiHintPanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-lightbulb"></i> AI Hint</span></div><div class="ai-panel-body" id="aiHintContent"></div></div>
-            <div id="aiAdvicePanel" class="ai-panel" style="display:none"><div class="ai-panel-header"><span><i class="bi bi-compass"></i> AI Advice</span></div><div class="ai-panel-body" id="aiAdviceContent"></div></div>
+            <div class="ai-carousel" id="aiCarousel">
+                <div id="aiHintPanel" class="ai-panel"><div class="ai-panel-body" id="aiHintContent" style="padding:16px;color:var(--text-muted);font-size:0.85rem">Click <b>Hint</b> to get a nudge on this question.</div></div>
+                <div id="aiAdvicePanel" class="ai-panel"><div class="ai-panel-body" id="aiAdviceContent" style="padding:16px;color:var(--text-muted);font-size:0.85rem">Loading advice...</div></div>
+            </div>
         </div>
         <div class="actions">
             <button class="btn-submit" id="btnSubmit" onclick="submitAnswer()" disabled>Submit</button>
@@ -390,10 +401,17 @@ async function submitAnswer() {
     document.getElementById('feedbackMsg').textContent = correct ? '✓ Correct!' : '✗ Incorrect';
     if (q.solution_text) document.getElementById('solutionText').textContent = q.solution_text;
 
-    // Show Advice button after wrong answer
+    // Show Advice button after wrong answer and auto-switch to it
     if (!correct) {
         const adviceBtn = document.getElementById('btnAiAdvice');
-        if (adviceBtn) adviceBtn.style.display = 'inline-flex';
+        if (adviceBtn) {
+            adviceBtn.style.display = 'flex';
+            // Reset loaded state so it fetches fresh
+            const advicePanel = document.getElementById('aiAdvicePanel');
+            if (advicePanel) advicePanel.dataset.loaded = '';
+            // Auto-switch to advice tab
+            showAiTab(adviceBtn, 'aiAdvicePanel');
+        }
     }
 
     document.getElementById('btnSubmit').style.display = 'none';
@@ -511,6 +529,27 @@ function nextQuestion() {
 
 renderQuestion();
 
+// ── AI Tab Switching ──
+function showAiTab(btn, panelId) {
+    // Deactivate all tabs
+    document.querySelectorAll('.ai-tutor-buttons .btn-ai[data-panel]').forEach(b => b.classList.remove('active'));
+    // Hide all panels
+    document.querySelectorAll('.ai-carousel .ai-panel').forEach(p => p.classList.remove('active'));
+    // Activate clicked tab and panel
+    btn.classList.add('active');
+    const panel = document.getElementById(panelId);
+    if (panel) panel.classList.add('active');
+    // Fetch content if not loaded yet
+    if (panelId === 'aiHintPanel' && !panel.dataset.loaded) {
+        fetchAiHint(questions[currentIdx]);
+        panel.dataset.loaded = '1';
+    }
+    if (panelId === 'aiAdvicePanel' && !panel.dataset.loaded) {
+        fetchAiAdvice();
+        panel.dataset.loaded = '1';
+    }
+}
+
 // ── AI Helper Functions ──
 function typewriterRender(container, fullText, onComplete) {
     let index = 0;
@@ -535,10 +574,8 @@ function showAiLoader(container) {
 }
 
 async function fetchAiHint(q) {
-    const panel = document.getElementById('aiHintPanel');
     const content = document.getElementById('aiHintContent');
-    if (!panel || !content) return;
-    panel.style.display = 'block';
+    if (!content) return;
     showAiLoader(content);
     try {
         const res = await fetch('/api/ai/hint', {
@@ -560,10 +597,8 @@ async function fetchAiHint(q) {
 }
 
 async function fetchAiAdvice() {
-    const panel = document.getElementById('aiAdvicePanel');
     const content = document.getElementById('aiAdviceContent');
-    if (!panel || !content) return;
-    panel.style.display = 'block';
+    if (!content) return;
     showAiLoader(content);
     try {
         const res = await fetch('/api/ai/diagnose', {
