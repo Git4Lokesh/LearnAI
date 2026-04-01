@@ -180,6 +180,87 @@ router.post("/institute/invite", ensureAuthenticated, ensureInstituteAdmin, asyn
     }
 });
 
+// ==================== Bulk Teacher Invite ====================
+
+// GET /institute/invite-teachers — show bulk invite page
+router.get("/institute/invite-teachers", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
+    try {
+        const instituteId = req.user.institute_id;
+        // Load existing invites
+        const invites = await db.query(
+            `SELECT ti.*, u.name AS claimed_name
+             FROM teacher_invites ti
+             LEFT JOIN users u ON u.id = ti.claimed_by
+             WHERE ti.institute_id = $1
+             ORDER BY ti.created_at DESC`,
+            [instituteId]
+        );
+        res.render('institute-invite-teachers.ejs', {
+            user: req.user,
+            invites: invites.rows,
+            error: req.session.bulkInviteError || null,
+            success: req.session.bulkInviteSuccess || null,
+        });
+        delete req.session.bulkInviteError;
+        delete req.session.bulkInviteSuccess;
+    } catch (err) {
+        console.error('Invite teachers page error:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// POST /institute/invite-teachers — bulk create invite tokens from emails
+router.post("/institute/invite-teachers", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
+    try {
+        const { emails } = req.body;
+        const instituteId = req.user.institute_id;
+
+        // Parse emails: support comma-separated, newline-separated, or mixed
+        const emailList = emails
+            .split(/[,\n\r]+/)
+            .map(e => e.trim().toLowerCase())
+            .filter(e => e && e.includes('@'));
+
+        if (emailList.length === 0) {
+            req.session.bulkInviteError = 'No valid emails found. Enter emails separated by commas or newlines.';
+            return res.redirect('/institute/invite-teachers');
+        }
+
+        let created = 0, skipped = 0;
+        for (const email of emailList) {
+            // Check if already invited
+            const existing = await db.query(
+                'SELECT id FROM teacher_invites WHERE institute_id = $1 AND email = $2',
+                [instituteId, email]
+            );
+            if (existing.rowCount > 0) { skipped++; continue; }
+
+            // Check if already a user at this institute
+            const existingUser = await db.query(
+                'SELECT id FROM users WHERE email = $1 AND institute_id = $2',
+                [email, instituteId]
+            );
+            if (existingUser.rowCount > 0) { skipped++; continue; }
+
+            // Generate unique token
+            const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+
+            await db.query(
+                'INSERT INTO teacher_invites (institute_id, email, token, invited_by) VALUES ($1, $2, $3, $4)',
+                [instituteId, email, token, req.user.id]
+            );
+            created++;
+        }
+
+        req.session.bulkInviteSuccess = `${created} invite(s) created, ${skipped} skipped (already invited or registered).`;
+        res.redirect('/institute/invite-teachers');
+    } catch (err) {
+        console.error('Bulk invite error:', err);
+        req.session.bulkInviteError = 'Failed to create invites. Please try again.';
+        res.redirect('/institute/invite-teachers');
+    }
+});
+
 // Institute batches management (admin only)
 router.get("/institute/batches", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
     try {
@@ -236,9 +317,10 @@ router.post("/institute/batches", ensureAuthenticated, ensureInstituteAdmin, asy
                 req.session.batchError = "Batch name is required.";
                 return res.redirect("/institute/batches");
             }
+            const inviteCode = Math.random().toString(36).substring(2, 10);
             await db.query(
-                "INSERT INTO batches (institute_id, name) VALUES ($1, $2)",
-                [instituteId, name.trim()]
+                "INSERT INTO batches (institute_id, name, invite_code) VALUES ($1, $2, $3)",
+                [instituteId, name.trim(), inviteCode]
             );
             req.session.batchSuccess = `Batch "${name.trim()}" created successfully.`;
         } else if (action === 'assign') {

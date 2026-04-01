@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join <%= batch.batch_name %> — Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <style>
+        .form-floating { margin-bottom: 0.75rem; }
+        .form-control { background: rgba(10,15,30,0.8); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 0.95rem; }
+        .form-control:focus { background: rgba(10,15,30,0.9); border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,158,11,0.15); color: var(--text); }
+        .welcome-badge {
+            background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius-lg);
+            padding: 1.25rem; text-align: center; margin-bottom: 1.5rem;
+        }
+        .welcome-badge .institute { color: var(--gold); font-weight: 700; font-size: 1.1rem; }
+        .welcome-badge .batch { color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px; }
+        .welcome-badge .icon { font-size: 2rem; color: var(--gold); margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+<div class="auth-wrap">
+    <div class="auth-left">
+        <div class="auth-card auth-card--bordered">
+            <div class="auth-brand"><i class="bi bi-diagram-3-fill"></i><span>Learn.ai</span></div>
+
+            <div class="welcome-badge">
+                <div class="icon"><i class="bi bi-mortarboard-fill"></i></div>
+                <div class="institute"><%= batch.institute_name %></div>
+                <div class="batch"><i class="bi bi-collection"></i> <%= batch.batch_name %></div>
+            </div>
+
+            <% if (error) { %>
+                <div class="error-msg"><i class="bi bi-exclamation-circle me-1"></i><%= error %></div>
+            <% } %>
+
+            <form method="POST" action="/join/<%= batch.invite_code %>">
+                <div class="form-floating">
+                    <input type="text" class="form-control" id="fullName" name="fullName" placeholder="Your Name" required>
+                    <label for="fullName">Full Name</label>
+                </div>
+                <div class="form-floating">
+                    <input type="email" class="form-control" id="email" name="email" placeholder="you@example.com" required>
+                    <label for="email">Email address</label>
+                </div>
+                <div class="form-floating">
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Password" required minlength="6">
+                    <label for="password">Create Password</label>
+                </div>
+                <button type="submit" class="btn-auth btn-auth--gold-border mt-2">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Join & Start Learning
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p>Already have an account? <a href="/login">Sign in</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-right">
+        <div class="journey">
+            <div class="journey-title text-gradient">Welcome to <%= batch.batch_name %></div>
+            <p class="journey-sub">You're joining <strong style="color:var(--gold);"><%= batch.institute_name %></strong> on Learn.ai. Sign up to access your assignments, practice questions, and AI tutor.</p>
+            <div class="timeline">
+                <div class="tl-step">
+                    <div class="tl-dot"><i class="bi bi-person-plus"></i></div>
+                    <div class="tl-label">Sign Up (30 seconds)</div>
+                    <div class="tl-desc">Enter your name, email, and password</div>
+                </div>
+                <div class="tl-step">
+                    <div class="tl-dot"><i class="bi bi-clipboard2-pulse"></i></div>
+                    <div class="tl-label">Take Diagnostic</div>
+                    <div class="tl-desc">Quick test to find your starting point across all subjects</div>
+                </div>
+                <div class="tl-step">
+                    <div class="tl-dot"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div class="tl-label">Start Practicing</div>
+                    <div class="tl-desc">AI adapts questions to your level in real-time</div>
+                </div>
+                <div class="tl-step">
+                    <div class="tl-dot"><i class="bi bi-trophy"></i></div>
+                    <div class="tl-label">Complete Assignments</div>
+                    <div class="tl-desc">Your teacher will assign targeted practice sets</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

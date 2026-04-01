@@ -84,6 +84,13 @@
 
             <div class="auth-footer">
                 <p>Already have an account? <a href="/login">Sign in</a></p>
+                <p style="margin-top:0.5rem;"><a href="#" onclick="document.getElementById('joinCodeSection').style.display='block';this.style.display='none';return false;" style="font-size:0.82rem;">Have a batch join code?</a></p>
+                <div id="joinCodeSection" style="display:none;margin-top:0.75rem;">
+                    <form action="/join/redirect" method="GET" style="display:flex;gap:8px;">
+                        <input type="text" name="code" class="form-control" placeholder="e.g. phy11abc" style="font-size:0.85rem;padding:8px 12px;" required>
+                        <button type="submit" class="btn-auth" style="width:auto;padding:8px 16px;font-size:0.85rem;">Join</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

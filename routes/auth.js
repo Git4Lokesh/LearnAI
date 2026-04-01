@@ -85,6 +85,199 @@ router.post("/signup", async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// MAGIC INVITE LINK — Batch Join Flow
+// ═══════════════════════════════════════════════════════════════
+
+// GET /join/redirect?code=xxx — redirect from signup page join code form
+router.get("/join/redirect", (req, res) => {
+    const code = (req.query.code || '').trim();
+    if (!code) return res.redirect('/signup');
+    res.redirect(`/join/${code}`);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TEACHER INVITE CLAIM
+// ═══════════════════════════════════════════════════════════════
+
+// GET /invite/teacher/:token — show teacher signup form
+router.get("/invite/teacher/:token", async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT ti.*, i.name AS institute_name
+             FROM teacher_invites ti
+             JOIN institutes i ON i.id = ti.institute_id
+             WHERE ti.token = $1`,
+            [req.params.token]
+        );
+        if (result.rowCount === 0) {
+            return res.render('signup.ejs', { error: 'Invalid or expired invite link.' });
+        }
+        const invite = result.rows[0];
+        if (invite.claimed_by) {
+            return res.render('login.ejs', { error: 'This invite has already been claimed. Please log in.' });
+        }
+        res.render('claim-teacher-invite.ejs', { invite, error: req.session.claimError || null });
+        delete req.session.claimError;
+    } catch (err) {
+        console.error('Teacher invite page error:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// POST /invite/teacher/:token — create teacher account
+router.post("/invite/teacher/:token", async (req, res) => {
+    try {
+        const { fullName, password } = req.body;
+        const token = req.params.token;
+
+        const inviteResult = await db.query(
+            `SELECT ti.*, i.name AS institute_name
+             FROM teacher_invites ti
+             JOIN institutes i ON i.id = ti.institute_id
+             WHERE ti.token = $1`,
+            [token]
+        );
+        if (inviteResult.rowCount === 0) {
+            return res.render('signup.ejs', { error: 'Invalid invite link.' });
+        }
+        const invite = inviteResult.rows[0];
+        if (invite.claimed_by) {
+            return res.render('login.ejs', { error: 'This invite has already been claimed.' });
+        }
+
+        // Check if email already exists
+        const existing = await db.query('SELECT id FROM users WHERE email = $1', [invite.email]);
+        if (existing.rowCount > 0) {
+            // Update existing user to teacher role at this institute
+            await db.query(
+                'UPDATE users SET role = $1, institute_id = $2 WHERE email = $3',
+                ['teacher', invite.institute_id, invite.email]
+            );
+            await db.query(
+                'UPDATE teacher_invites SET claimed_by = (SELECT id FROM users WHERE email = $1), claimed_at = now() WHERE id = $2',
+                [invite.email, invite.id]
+            );
+            req.session.claimError = 'Your account has been upgraded to teacher. Please log in.';
+            return res.redirect('/login');
+        }
+
+        // Create new teacher account
+        const hash = await bcrypt.hash(password, saltRounds);
+        const userResult = await db.query(
+            "INSERT INTO users (email, password, name, role, institute_id) VALUES ($1, $2, $3, 'teacher', $4) RETURNING *",
+            [invite.email, hash, fullName, invite.institute_id]
+        );
+        const user = userResult.rows[0];
+
+        // Mark invite as claimed
+        await db.query(
+            'UPDATE teacher_invites SET claimed_by = $1, claimed_at = now() WHERE id = $2',
+            [user.id, invite.id]
+        );
+
+        // Log in and redirect
+        req.login(user, (err) => {
+            if (err) return res.status(500).send('Login failed');
+            return res.redirect('/institute/dashboard/teacher');
+        });
+    } catch (err) {
+        console.error('Teacher claim error:', err);
+        req.session.claimError = 'Registration failed. Please try again.';
+        res.redirect(`/invite/teacher/${req.params.token}`);
+    }
+});
+
+// GET /join/:code — show signup form with batch/institute pre-filled
+router.get("/join/:code", async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT b.id AS batch_id, b.name AS batch_name, b.invite_code,
+                    i.id AS institute_id, i.name AS institute_name
+             FROM batches b
+             JOIN institutes i ON i.id = b.institute_id
+             WHERE b.invite_code = $1`,
+            [req.params.code]
+        );
+        if (result.rowCount === 0) {
+            return res.render('signup.ejs', { error: 'Invalid invite link. Please check with your teacher.' });
+        }
+        const batch = result.rows[0];
+        res.render('join-batch.ejs', {
+            batch,
+            error: req.session.joinError || null,
+        });
+        delete req.session.joinError;
+    } catch (err) {
+        console.error('Join page error:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// POST /join/:code — create student account and auto-join batch
+router.post("/join/:code", async (req, res) => {
+    try {
+        const { fullName, email, password } = req.body;
+        const code = req.params.code;
+
+        // Look up batch
+        const batchResult = await db.query(
+            `SELECT b.id AS batch_id, b.institute_id, b.name AS batch_name, i.name AS institute_name
+             FROM batches b JOIN institutes i ON i.id = b.institute_id
+             WHERE b.invite_code = $1`,
+            [code]
+        );
+        if (batchResult.rowCount === 0) {
+            return res.render('signup.ejs', { error: 'Invalid invite code.' });
+        }
+        const batch = batchResult.rows[0];
+
+        // Check if email already exists
+        const existing = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+        if (existing.rowCount > 0) {
+            const existingUser = existing.rows[0];
+            // If user exists but not in this batch, add them
+            if (existingUser.institute_id === batch.institute_id) {
+                const alreadyInBatch = await db.query(
+                    'SELECT 1 FROM batch_students WHERE batch_id = $1 AND user_id = $2',
+                    [batch.batch_id, existingUser.id]
+                );
+                if (alreadyInBatch.rowCount === 0) {
+                    await db.query('INSERT INTO batch_students (batch_id, user_id) VALUES ($1, $2)', [batch.batch_id, existingUser.id]);
+                }
+                // Log them in
+                return req.login(existingUser, (err) => {
+                    if (err) return res.status(500).send('Login failed');
+                    return res.redirect('/');
+                });
+            }
+            req.session.joinError = 'This email is already registered with a different institute. Please use a different email or contact your teacher.';
+            return res.redirect(`/join/${code}`);
+        }
+
+        // Create new student account
+        const hash = await bcrypt.hash(password, saltRounds);
+        const userResult = await db.query(
+            "INSERT INTO users (email, password, name, role, institute_id) VALUES ($1, $2, $3, 'student', $4) RETURNING *",
+            [email, hash, fullName, batch.institute_id]
+        );
+        const user = userResult.rows[0];
+
+        // Add to batch
+        await db.query('INSERT INTO batch_students (batch_id, user_id) VALUES ($1, $2)', [batch.batch_id, user.id]);
+
+        // Log in and redirect to diagnostic
+        req.login(user, (err) => {
+            if (err) return res.status(500).send('Login failed');
+            return res.redirect('/diagnostic');
+        });
+    } catch (err) {
+        console.error('Join error:', err);
+        req.session.joinError = 'Registration failed. Please try again.';
+        res.redirect(`/join/${req.params.code}`);
+    }
+});
+
 router.post("/login", (req, res, next) => {
     const selectedRole = req.body.role || 'student'; // from hidden field
 

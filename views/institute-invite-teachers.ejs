@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invite Teachers — Learn.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <style>
+        .invite-section { max-width: 800px; margin: 0 auto; }
+        textarea.form-control { min-height: 120px; font-family: monospace; font-size: 0.9rem; }
+        .invite-table { width: 100%; font-size: 0.85rem; }
+        .invite-table th { color: var(--gold); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; border-bottom: 1px solid rgba(245,158,11,0.15); }
+        .invite-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+        .status-pending { color: var(--gold); }
+        .status-claimed { color: var(--green); }
+        .copy-btn { background: rgba(245,158,11,0.15); border: 1px solid var(--gold); color: var(--gold); font-size: 0.75rem; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .copy-btn:hover { background: rgba(245,158,11,0.3); }
+        .form-control { background: rgba(10,15,30,0.8); border: 2px solid var(--border-light); border-radius: 12px; color: var(--text); padding: 0.75rem 1rem; }
+        .form-control:focus { background: rgba(10,15,30,0.9); border-color: var(--gold); box-shadow: 0 0 0 0.25rem rgba(245,158,11,0.25); color: var(--text); }
+    </style>
+</head>
+<body class="bg-alt">
+    <div class="page-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="bi bi-person-plus-fill me-2"></i>Invite Teachers</h1>
+                <a href="/" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i> Dashboard</a>
+            </div>
+        </div>
+    </div>
+    <div class="container py-4">
+        <div class="invite-section">
+
+            <% if (error) { %>
+                <div class="alert-dark-danger p-3 mb-3"><i class="bi bi-exclamation-triangle me-2"></i><%= error %></div>
+            <% } %>
+            <% if (success) { %>
+                <div class="alert-dark-success p-3 mb-3"><i class="bi bi-check-circle me-2"></i><%= success %></div>
+            <% } %>
+
+            <div class="card-section animate-in">
+                <div class="section-label">Add Teacher Emails</div>
+                <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;">
+                    Enter teacher email addresses below (one per line, or comma-separated). Each teacher will get a unique invite link they can use to create their account.
+                </p>
+                <form method="POST" action="/institute/invite-teachers">
+                    <textarea class="form-control mb-3" name="emails" placeholder="teacher1@school.com&#10;teacher2@school.com&#10;teacher3@school.com" required></textarea>
+                    <button type="submit" class="btn-auth" style="width:auto;padding:10px 24px;">
+                        <i class="bi bi-send me-2"></i>Generate Invite Links
+                    </button>
+                </form>
+            </div>
+
+            <% if (invites.length > 0) { %>
+            <div class="card-section animate-in mt-4" style="animation-delay:0.1s;">
+                <div class="section-label">Invite Links (<%= invites.length %>)</div>
+                <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:1rem;">
+                    Copy and share these links with your teachers. Each link is unique and can only be used once.
+                </p>
+                <div style="overflow-x:auto;">
+                    <table class="invite-table">
+                        <thead>
+                            <tr><th>Email</th><th>Status</th><th>Link</th><th>Created</th></tr>
+                        </thead>
+                        <tbody>
+                            <% invites.forEach(inv => { %>
+                            <tr>
+                                <td><%= inv.email %></td>
+                                <td>
+                                    <% if (inv.claimed_by) { %>
+                                        <span class="status-claimed"><i class="bi bi-check-circle"></i> Joined<%= inv.claimed_name ? ' (' + inv.claimed_name + ')' : '' %></span>
+                                    <% } else { %>
+                                        <span class="status-pending"><i class="bi bi-clock"></i> Pending</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (!inv.claimed_by) { %>
+                                        <button class="copy-btn" onclick="copyLink('<%= inv.token %>', this)"><i class="bi bi-clipboard"></i> Copy</button>
+                                    <% } else { %>—<% } %>
+                                </td>
+                                <td style="color:var(--text-muted);font-size:0.78rem;"><%= new Date(inv.created_at).toLocaleDateString() %></td>
+                            </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <% } %>
+        </div>
+    </div>
+    <script>
+    function copyLink(token, btn) {
+        const url = window.location.origin + '/invite/teacher/' + token;
+        navigator.clipboard.writeText(url).then(() => {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+            btn.style.background = 'rgba(16,185,129,0.2)'; btn.style.borderColor = '#10B981'; btn.style.color = '#10B981';
+            setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+        }).catch(() => { prompt('Copy this link:', url); });
+    }
+    </script>
+</body>
+</html>
