@@ -26,6 +26,7 @@ import knowledgeGraphRoutes from './routes/knowledgeGraph.js';
 import setupGroupStudyRoutes from './routes/groupStudy.js';
 import adminRoutes from './routes/admin.js';
 import aiRoutes from './routes/ai.js';
+import assignmentRoutes from './routes/assignments.js';
 
 dotenv.config();
 
@@ -132,6 +133,7 @@ app.use(knowledgeGraphRoutes);
 app.use(setupGroupStudyRoutes(io));
 app.use(adminRoutes);
 app.use(aiRoutes);
+app.use(assignmentRoutes);
 
 // WebSocket connection handling
 io.use((socket, next) => {

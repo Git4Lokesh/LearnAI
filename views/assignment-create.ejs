@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Assignment — Learn.ai</title>
+    <link rel="stylesheet" href="/css/theme.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .page-wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+
+        .top-bar {
+            background: var(--gradient-header); border-bottom: 2px solid var(--gold);
+            padding: 1.25rem 2rem; display: flex; justify-content: space-between; align-items: center;
+            position: relative; overflow: hidden;
+        }
+        .top-bar::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 80% 50%, rgba(245,158,11,0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .top-bar .title { font-size: 1.4rem; font-weight: 700; color: var(--gold); display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
+        .top-bar .actions { position: relative; z-index: 1; }
+
+        .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px; }
+
+        .form-section {
+            background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border); border-radius: var(--radius-lg);
+            padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);
+            transition: var(--transition-slow); position: relative; overflow: hidden;
+        }
+        .form-section::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(245,158,11,0.04) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+        }
+        .form-section:hover::before { opacity: 1; }
+        .form-section:hover { border-color: rgba(245,158,11,0.25); box-shadow: var(--shadow-lg), var(--shadow-glow-gold); transform: translateY(-2px); }
+        .section-title { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem; }
+
+        .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 200px; }
+        .form-group label { display: block; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); color: var(--text); font-size: 0.9rem;
+        }
+        .form-group input:focus, .form-group select:focus { border-color: var(--purple); outline: none; }
+
+        .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.85rem; }
+
+        /* Filter bar */
+        .filter-bar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end; }
+        .filter-bar .form-group { min-width: 160px; flex: unset; }
+        .btn-filter {
+            padding: 10px 18px; background: var(--gradient-purple); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-weight: 600; font-size: 0.85rem; cursor: pointer;
+            height: fit-content; align-self: flex-end;
+        }
+        .btn-filter:hover { opacity: 0.9; }
+
+        /* Question list */
+        .question-list { max-height: 400px; overflow-y: auto; }
+        .q-item {
+            display: flex; align-items: flex-start; gap: 12px; padding: 12px;
+            border: 1px solid var(--glass-border); border-radius: var(--radius-sm); margin-bottom: 8px;
+            background: var(--glass-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            transition: var(--transition-slow); position: relative; overflow: hidden;
+        }
+        .q-item::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(245,158,11,0.05) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .q-item:hover::before { opacity: 1; }
+        .q-item:hover { border-color: rgba(245,158,11,0.3); box-shadow: var(--shadow-md), var(--shadow-glow-gold); transform: translateY(-1px); }
+        .q-item.selected { border-color: var(--green); background: rgba(16,185,129,0.05); }
+        .q-item input[type="checkbox"] { accent-color: var(--green); width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+        .q-item-body { flex: 1; }
+        .q-item-text { font-size: 0.88rem; color: var(--text); line-height: 1.5; }
+        .q-item-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; display: flex; gap: 12px; }
+        .q-item-meta span { display: flex; align-items: center; gap: 4px; }
+
+        .selected-count { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
+        .selected-count strong { color: var(--green); }
+
+        .empty-state { text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.9rem; }
+
+        /* Submit */
+        .btn-create {
+            padding: 12px 32px; background: var(--gradient-purple); color: #fff; border: none;
+            border-radius: var(--radius); font-weight: 600; font-size: 1rem; cursor: pointer;
+            box-shadow: var(--shadow-glow-purple);
+        }
+        .btn-create:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-create:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .btn-back { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; margin-right: 1rem; }
+        .btn-back:hover { color: var(--text-secondary); }
+        .form-actions { display: flex; align-items: center; gap: 1rem; }
+    </style>
+</head>
+<body>
+<div class="top-bar">
+    <div class="title"><i class="bi bi-clipboard-plus"></i> Create Assignment</div>
+    <div class="actions">
+        <a href="/assignments" style="color:var(--text-muted);text-decoration:none;font-size:0.85rem;display:flex;align-items:center;gap:4px;"><i class="bi bi-arrow-left"></i> Back to Assignments</a>
+    </div>
+</div>
+<div class="page-wrap">
+    <h1 class="page-title" style="display:none;"></h1>
+
+    <% if (error) { %>
+        <div class="error-msg"><i class="bi bi-exclamation-circle"></i> <%= error %></div>
+    <% } %>
+
+    <form id="assignmentForm" action="/assignments/create" method="POST">
+        <!-- Assignment Details -->
+        <div class="form-section">
+            <div class="section-title">Assignment Details</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input type="text" id="title" name="title" required placeholder="e.g. Kinematics Practice Set 1">
+                </div>
+                <div class="form-group">
+                    <label for="batch_id">Batch</label>
+                    <select id="batch_id" name="batch_id" required>
+                        <option value="">Select batch...</option>
+                        <% batches.forEach(b => { %>
+                            <option value="<%= b.id %>"><%= b.name %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="deadline">Deadline</label>
+                    <input type="datetime-local" id="deadline" name="deadline" required>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Generate -->
+        <div class="form-section" style="border-color:rgba(245,158,11,0.2);">
+            <div class="section-title" style="color:var(--gold);display:flex;align-items:center;gap:8px;">
+                <i class="bi bi-lightning-charge-fill"></i> Quick Generate
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">Pick filters and count — we'll randomly select questions for you in one click.</p>
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="qgSubject">Subject</label>
+                    <select id="qgSubject">
+                        <option value="">All Subjects</option>
+                        <% subjects.forEach(s => { %>
+                            <option value="<%= s %>"><%= s %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="qgConcept">Concept</label>
+                    <select id="qgConcept">
+                        <option value="">All Concepts</option>
+                        <% concepts.forEach(c => { %>
+                            <option value="<%= c.id %>" data-subject="<%= c.subject %>"><%= c.name %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="qgDifficulty">Difficulty</label>
+                    <select id="qgDifficulty">
+                        <option value="">Mixed</option>
+                        <option value="1">Easy</option>
+                        <option value="2">Medium</option>
+                        <option value="3">Hard</option>
+                    </select>
+                </div>
+                <div class="form-group" style="max-width:100px;">
+                    <label for="qgCount">Count</label>
+                    <input type="number" id="qgCount" value="10" min="1" max="50" style="text-align:center;">
+                </div>
+                <button type="button" class="btn-filter" id="btnQuickGenerate" style="background:linear-gradient(135deg,var(--gold),#D97706);box-shadow:0 4px 12px rgba(245,158,11,0.3);">
+                    <i class="bi bi-lightning-charge-fill"></i> Generate
+                </button>
+            </div>
+            <div id="qgStatus" style="font-size:0.82rem;color:var(--text-muted);margin-top:0.5rem;display:none;"></div>
+        </div>
+
+        <!-- Question Selection (Manual) -->
+        <div class="form-section">
+            <div class="section-title">Or Select Manually from Bank</div>
+
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="filterSubject">Subject</label>
+                    <select id="filterSubject">
+                        <option value="">All Subjects</option>
+                        <% subjects.forEach(s => { %>
+                            <option value="<%= s %>"><%= s %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filterConcept">Concept</label>
+                    <select id="filterConcept">
+                        <option value="">All Concepts</option>
+                        <% concepts.forEach(c => { %>
+                            <option value="<%= c.id %>" data-subject="<%= c.subject %>"><%= c.name %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filterDifficulty">Difficulty</label>
+                    <select id="filterDifficulty">
+                        <option value="">All</option>
+                        <option value="1">Easy (Tier 1)</option>
+                        <option value="2">Medium (Tier 2)</option>
+                        <option value="3">Hard (Tier 3)</option>
+                    </select>
+                </div>
+                <button type="button" class="btn-filter" id="btnSearch"><i class="bi bi-search"></i> Search</button>
+            </div>
+
+            <div class="selected-count">Selected: <strong id="selectedCount">0</strong> questions</div>
+
+            <div class="question-list" id="questionList">
+                <div class="empty-state"><i class="bi bi-search"></i> Use the filters above to search for questions</div>
+            </div>
+        </div>
+
+        <!-- Hidden field for selected question IDs -->
+        <input type="hidden" name="question_ids" id="questionIds">
+
+        <div class="form-actions">
+            <a href="/assignments" class="btn-back"><i class="bi bi-arrow-left"></i> Back to Assignments</a>
+            <button type="submit" class="btn-create" id="btnCreate" disabled>
+                <i class="bi bi-check2-circle"></i> Create Assignment
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function() {
+    const selectedQuestions = new Set();
+    const allConcepts = <%- JSON.stringify(concepts) %>;
+
+    // Quick Generate — filter concepts dropdown
+    document.getElementById('qgSubject').addEventListener('change', function() {
+        const subject = this.value;
+        const sel = document.getElementById('qgConcept');
+        sel.innerHTML = '<option value="">All Concepts</option>';
+        (subject ? allConcepts.filter(c => c.subject === subject) : allConcepts).forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id; opt.textContent = c.name;
+            sel.appendChild(opt);
+        });
+    });
+
+    // Quick Generate — one-click auto-select
+    document.getElementById('btnQuickGenerate').addEventListener('click', async () => {
+        const subject = document.getElementById('qgSubject').value;
+        const concept_id = document.getElementById('qgConcept').value;
+        const difficulty_tier = document.getElementById('qgDifficulty').value;
+        const count = document.getElementById('qgCount').value;
+        const statusEl = document.getElementById('qgStatus');
+
+        statusEl.style.display = 'block';
+        statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+
+        const params = new URLSearchParams();
+        if (subject) params.set('subject', subject);
+        if (concept_id) params.set('concept_id', concept_id);
+        if (difficulty_tier) params.set('difficulty_tier', difficulty_tier);
+        params.set('count', count);
+
+        try {
+            const res = await fetch('/api/assignments/auto-generate?' + params.toString());
+            const data = await res.json();
+            if (data.questions.length === 0) {
+                statusEl.innerHTML = '<i class="bi bi-exclamation-circle" style="color:var(--red);"></i> No questions found matching those filters.';
+                return;
+            }
+            // Add all returned questions to selection
+            data.questions.forEach(q => selectedQuestions.add(q.id));
+            updateSelectedCount();
+            statusEl.innerHTML = '<i class="bi bi-check-circle" style="color:var(--green);"></i> Added ' + data.questions.length + ' questions. Total selected: ' + selectedQuestions.size;
+
+            // Also trigger a search to show them in the manual list
+            document.getElementById('filterSubject').value = subject;
+            document.getElementById('filterConcept').value = concept_id;
+            document.getElementById('filterDifficulty').value = difficulty_tier;
+            document.getElementById('btnSearch').click();
+        } catch (e) {
+            statusEl.innerHTML = '<i class="bi bi-exclamation-circle" style="color:var(--red);"></i> Failed to generate. Try again.';
+            console.error('Quick generate failed:', e);
+        }
+    });
+
+    // Manual filter — concepts by subject
+    document.getElementById('filterSubject').addEventListener('change', function() {
+        const subject = this.value;
+        const conceptSelect = document.getElementById('filterConcept');
+        conceptSelect.innerHTML = '<option value="">All Concepts</option>';
+        const filtered = subject ? allConcepts.filter(c => c.subject === subject) : allConcepts;
+        filtered.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            conceptSelect.appendChild(opt);
+        });
+    });
+
+    // Search questions
+    document.getElementById('btnSearch').addEventListener('click', async () => {
+        const subject = document.getElementById('filterSubject').value;
+        const concept_id = document.getElementById('filterConcept').value;
+        const difficulty_tier = document.getElementById('filterDifficulty').value;
+
+        const params = new URLSearchParams();
+        if (subject) params.set('subject', subject);
+        if (concept_id) params.set('concept_id', concept_id);
+        if (difficulty_tier) params.set('difficulty_tier', difficulty_tier);
+
+        try {
+            const res = await fetch('/api/assignments/questions?' + params.toString());
+            const data = await res.json();
+            renderQuestions(data.questions || []);
+        } catch (e) {
+            console.error('Failed to fetch questions:', e);
+        }
+    });
+
+    function renderQuestions(questions) {
+        const container = document.getElementById('questionList');
+        if (questions.length === 0) {
+            container.innerHTML = '<div class="empty-state">No questions found matching your filters.</div>';
+            return;
+        }
+        const tierLabels = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+        container.innerHTML = questions.map(q => `
+            <div class="q-item ${selectedQuestions.has(q.id) ? 'selected' : ''}" data-id="${q.id}">
+                <input type="checkbox" ${selectedQuestions.has(q.id) ? 'checked' : ''} onchange="toggleQuestion(${q.id}, this)">
+                <div class="q-item-body">
+                    <div class="q-item-text">${q.question_text}</div>
+                    <div class="q-item-meta">
+                        <span><i class="bi bi-book"></i> ${q.subject || '—'}</span>
+                        <span><i class="bi bi-diagram-3"></i> ${q.concept_name || '—'}</span>
+                        <span><i class="bi bi-speedometer2"></i> ${tierLabels[q.difficulty_tier] || 'Medium'}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Re-render MathJax if present
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise([container]).catch(() => {});
+        }
+    }
+
+    // Toggle question selection
+    window.toggleQuestion = function(id, checkbox) {
+        if (checkbox.checked) {
+            selectedQuestions.add(id);
+        } else {
+            selectedQuestions.delete(id);
+        }
+        const item = checkbox.closest('.q-item');
+        item.classList.toggle('selected', checkbox.checked);
+        updateSelectedCount();
+    };
+
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = selectedQuestions.size;
+        document.getElementById('questionIds').value = Array.from(selectedQuestions).join(',');
+        document.getElementById('btnCreate').disabled = selectedQuestions.size === 0;
+    }
+
+    // Form validation
+    document.getElementById('assignmentForm').addEventListener('submit', function(e) {
+        if (selectedQuestions.size === 0) {
+            e.preventDefault();
+            alert('Please select at least one question.');
+        }
+    });
+})();
+</script>
+</body>
+</html>

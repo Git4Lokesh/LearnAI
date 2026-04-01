@@ -466,6 +466,83 @@ router.post("/institute/questions/upload", ensureAuthenticated, ensureInstituteU
     }
 });
 
+// ==================== PDF Question Extraction ====================
+
+// Multer for PDF uploads (20MB limit)
+const pdfUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.originalname.toLowerCase().endsWith('.pdf')) cb(null, true);
+        else cb(new Error('Only PDF files are accepted'), false);
+    }
+});
+
+router.post("/institute/questions/upload-pdf", ensureAuthenticated, ensureInstituteUser, (req, res, next) => {
+    pdfUpload.single('file')(req, res, (err) => {
+        if (err) {
+            req.session.uploadError = err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 20MB).' : (err.message || 'Upload failed.');
+            return res.redirect("/institute/questions/upload");
+        }
+        next();
+    });
+}, async (req, res) => {
+    try {
+        if (!req.file) {
+            req.session.uploadError = "Please select a PDF file.";
+            return res.redirect("/institute/questions/upload");
+        }
+
+        const { extractQuestionsFromPDF } = await import('../services/pdfQuestionExtractor.js');
+        const subject = req.body.pdf_subject || '';
+        const source = req.body.pdf_source || req.file.originalname;
+
+        const questions = await extractQuestionsFromPDF(req.file.buffer, req.file.originalname, { subject, source });
+
+        if (questions.length === 0) {
+            req.session.uploadError = "No questions could be extracted from this PDF. Check the format.";
+            return res.redirect("/institute/questions/upload");
+        }
+
+        // Get concept list for AI tagging
+        const conceptsResult = await db.query('SELECT id, name FROM concepts ORDER BY name');
+        const conceptList = conceptsResult.rows;
+
+        let imported = 0, failed = 0;
+        for (const q of questions) {
+            try {
+                // AI concept classification
+                let conceptId = null, confidence = 0;
+                try {
+                    const classification = await classifyQuestionConcept(q.question_text, subject, conceptList, geminiGenerate);
+                    conceptId = classification.concept_id;
+                    confidence = classification.confidence;
+                } catch (tagErr) {
+                    console.error('Concept tagging failed:', tagErr.message);
+                }
+
+                await db.query(
+                    `INSERT INTO questions (question_text, option1, option2, option3, option4, correct_answer, solution_text, concept_id, difficulty_tier, source, status, institute_id, concept_confidence, needs_review_tag)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13)`,
+                    [q.question_text, q.option1, q.option2, q.option3, q.option4, q.correct_answer, q.solution_text,
+                     conceptId, 2, source, req.user.institute_id, confidence, q.needs_review || confidence < 0.7]
+                );
+                imported++;
+            } catch (insertErr) {
+                console.error('Failed to insert PDF question:', insertErr.message);
+                failed++;
+            }
+        }
+
+        req.session.uploadSuccess = `PDF extraction complete: ${imported} questions imported, ${failed} failed. All set to 'pending' for review.`;
+        res.redirect("/institute/questions/upload");
+    } catch (err) {
+        console.error('PDF extraction error:', err);
+        req.session.uploadError = "PDF extraction failed: " + (err.message || 'Unknown error');
+        res.redirect("/institute/questions/upload");
+    }
+});
+
 // ==================== Question Review Queue ====================
 
 // GET /institute/questions/review — display pending questions for review

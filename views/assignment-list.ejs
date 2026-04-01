@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignments — Learn.ai</title>
+    <link rel="stylesheet" href="/css/theme.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .page-wrap { max-width: 1000px; margin: 0 auto; padding: 2rem 1rem; }
+
+        .top-bar {
+            background: var(--gradient-header); border-bottom: 2px solid var(--gold);
+            padding: 1.25rem 2rem; display: flex; justify-content: space-between; align-items: center;
+            position: relative; overflow: hidden;
+        }
+        .top-bar::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse at 80% 50%, rgba(245,158,11,0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .top-bar .title { font-size: 1.4rem; font-weight: 700; color: var(--gold); display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
+        .top-bar .actions { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+
+        .page-header { display: none; }
+        .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: var(--purple-light); }
+
+        .btn-new {
+            padding: 10px 20px; background: var(--gradient-purple); color: #fff; border: none;
+            border-radius: var(--radius); font-weight: 600; font-size: 0.88rem; cursor: pointer;
+            text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-new:hover { opacity: 0.9; }
+
+        .assignment-card {
+            background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border); border-radius: var(--radius-lg);
+            padding: 1.25rem 1.5rem; margin-bottom: 1rem; transition: var(--transition-slow);
+            position: relative; overflow: hidden; box-shadow: var(--shadow-sm);
+        }
+        .assignment-card::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(245,158,11,0.05) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+        }
+        .assignment-card:hover::before { opacity: 1; }
+        .assignment-card:hover { border-color: rgba(245,158,11,0.3); box-shadow: var(--shadow-lg), var(--shadow-glow-gold); transform: translateY(-3px); }
+
+        .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
+        .card-title { font-size: 1.05rem; font-weight: 600; color: var(--text-primary); }
+        .card-batch { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+
+        .status-badge {
+            font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-pill);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .status-badge.active { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+        .status-badge.closed { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+        .status-badge.complete { background: rgba(124,58,237,0.15); color: var(--purple-light); border: 1px solid rgba(124,58,237,0.3); }
+
+        .card-stats { display: flex; gap: 1.5rem; font-size: 0.82rem; color: var(--text-muted); flex-wrap: wrap; }
+        .card-stats span { display: flex; align-items: center; gap: 5px; }
+        .card-stats i { font-size: 0.9rem; }
+
+        .card-actions { margin-top: 0.75rem; display: flex; gap: 0.75rem; }
+        .btn-view {
+            padding: 6px 14px; font-size: 0.78rem; font-weight: 600; border-radius: var(--radius-sm);
+            text-decoration: none; border: 1px solid var(--border); color: var(--text-secondary);
+            background: var(--card); transition: var(--transition);
+        }
+        .btn-view:hover { border-color: var(--purple); color: var(--purple-light); }
+
+        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
+        .empty-state i { font-size: 2.5rem; margin-bottom: 1rem; display: block; color: var(--text-muted); }
+
+        .btn-back { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; }
+        .btn-back:hover { color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+<div class="top-bar">
+    <div class="title"><i class="bi bi-clipboard-data"></i> Assignments</div>
+    <div class="actions">
+        <a href="/institute/dashboard/teacher" style="color:var(--text-muted);text-decoration:none;font-size:0.85rem;display:flex;align-items:center;gap:4px;"><i class="bi bi-arrow-left"></i> Dashboard</a>
+        <a href="/assignments/create" class="btn-new"><i class="bi bi-plus-lg"></i> New Assignment</a>
+    </div>
+</div>
+<div class="page-wrap">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title"><i class="bi bi-clipboard-data"></i> Assignments</h1>
+            <a href="/institute/dashboard/teacher" class="btn-back"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+        </div>
+        <a href="/assignments/create" class="btn-new"><i class="bi bi-plus-lg"></i> New Assignment</a>
+    </div>
+
+    <% if (assignments.length === 0) { %>
+        <div class="empty-state">
+            <i class="bi bi-clipboard-x"></i>
+            <p>No assignments yet. Create your first assignment to get started.</p>
+        </div>
+    <% } else { %>
+        <% assignments.forEach(a => {
+            const now = new Date();
+            const deadline = new Date(a.deadline);
+            const isActive = deadline > now;
+            const isFullySubmitted = parseInt(a.submission_count) >= parseInt(a.student_count) && parseInt(a.student_count) > 0;
+            let statusClass = 'active';
+            let statusLabel = 'Active';
+            if (isFullySubmitted) { statusClass = 'complete'; statusLabel = 'All Submitted'; }
+            else if (!isActive) { statusClass = 'closed'; statusLabel = 'Closed'; }
+        %>
+            <div class="assignment-card">
+                <div class="card-top">
+                    <div>
+                        <div class="card-title"><%= a.title %></div>
+                        <div class="card-batch"><i class="bi bi-people"></i> <%= a.batch_name %></div>
+                    </div>
+                    <span class="status-badge <%= statusClass %>"><%= statusLabel %></span>
+                </div>
+                <div class="card-stats">
+                    <span><i class="bi bi-calendar-event"></i> Due: <%= deadline.toLocaleDateString() %> <%= deadline.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) %></span>
+                    <span><i class="bi bi-question-circle"></i> <%= a.question_count %> questions</span>
+                    <span><i class="bi bi-check2-square"></i> <%= a.submission_count %>/<%= a.student_count %> submitted</span>
+                </div>
+                <div class="card-actions">
+                    <a href="/assignments/<%= a.id %>/submissions" class="btn-view"><i class="bi bi-bar-chart"></i> View Submissions</a>
+                </div>
+            </div>
+        <% }); %>
+    <% } %>
+</div>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= assignment.title %> — Learn.ai</title>
+    <link rel="stylesheet" href="/css/theme.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']], processEscapes: true },
+      options: { renderActions: { addMenu: [] } }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        .test-container { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+        .test-header {
+            background: var(--gradient-header); border-bottom: 1px solid var(--border);
+            padding: 0 1.5rem; height: 56px; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0; z-index: 100;
+        }
+        .test-header .logo { color: var(--gold); font-weight: 700; font-size: 1.15rem; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .test-header .title-text { color: var(--text-primary); font-weight: 600; font-size: 0.9rem; }
+        .test-header .timer { font-family: 'Courier New', monospace; font-size: 1.1rem; font-weight: 700; color: var(--green-light); letter-spacing: 1px; }
+
+        .test-body { display: flex; flex: 1; overflow: hidden; }
+
+        .question-panel { flex: 1; overflow-y: auto; padding: 2rem 2.5rem; display: flex; flex-direction: column; }
+        .q-header { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; }
+        .q-number { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+        .q-difficulty { font-size: 0.7rem; font-weight: 600; padding: 3px 10px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: 0.5px; }
+        .q-difficulty.tier-1 { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+        .q-difficulty.tier-2 { background: rgba(245,158,11,0.15); color: var(--gold); border: 1px solid rgba(245,158,11,0.3); }
+        .q-difficulty.tier-3 { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+        .q-text { font-size: 1.05rem; line-height: 1.7; color: var(--text); margin-bottom: 1.5rem; }
+
+        .options-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
+        .option-item {
+            display: flex; align-items: flex-start; gap: 14px;
+            background: var(--glass-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            padding: 14px 18px; cursor: pointer; transition: var(--transition-slow);
+            position: relative; overflow: hidden;
+        }
+        .option-item::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(245,158,11,0.05) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .option-item:hover::before { opacity: 1; }
+        .option-item:hover { border-color: rgba(245,158,11,0.3); box-shadow: var(--shadow-md), var(--shadow-glow-gold); transform: translateY(-1px); }
+        .option-item.selected { border-color: var(--purple); background: rgba(124,58,237,0.1); box-shadow: var(--shadow-glow-purple); }
+        .option-item input[type="radio"] { accent-color: var(--purple); width: 18px; height: 18px; margin-top: 2px; cursor: pointer; flex-shrink: 0; }
+        .option-label-letter {
+            width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.82rem; flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary);
+        }
+        .option-item.selected .option-label-letter { background: var(--purple); border-color: var(--purple); color: #fff; }
+        .option-text { font-size: 0.95rem; line-height: 1.5; color: var(--text); padding-top: 3px; }
+
+        /* Palette */
+        .palette-panel {
+            width: 260px; flex-shrink: 0; background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-left: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; overflow-y: auto;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+        }
+        .palette-title { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; padding: 12px 16px 6px; }
+        .palette-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 4px 16px 12px; }
+        .palette-btn {
+            width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center;
+        }
+        .palette-btn:hover { border-color: var(--purple-light); transform: scale(1.08); }
+        .palette-btn.current { outline: 2px solid var(--cyan); outline-offset: 1px; }
+        .palette-btn.answered { background: var(--green); border-color: var(--green); color: #fff; }
+
+        .palette-legend { padding: 12px 16px; border-top: 1px solid var(--border); margin-top: auto; }
+        .palette-legend-title { font-size: 0.7rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+        .legend-items { display: flex; flex-direction: column; gap: 6px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; color: var(--text-muted); }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+        .legend-swatch.unattempted { background: var(--card); border: 1px solid var(--border); }
+        .legend-swatch.answered { background: var(--green); }
+
+        /* Footer */
+        .test-footer {
+            background: var(--surface); border-top: 1px solid var(--border);
+            padding: 12px 1.5rem; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0; gap: 8px; flex-wrap: wrap;
+        }
+        .btn-test {
+            padding: 10px 18px; border-radius: var(--radius-sm); font-size: 0.82rem;
+            font-weight: 600; cursor: pointer; transition: var(--transition); border: 1px solid var(--border);
+        }
+        .btn-clear { background: var(--card); color: var(--text-secondary); }
+        .btn-clear:hover { background: rgba(255,255,255,0.05); }
+        .btn-prev { background: var(--card); color: var(--text-secondary); }
+        .btn-prev:hover { background: rgba(255,255,255,0.05); }
+        .btn-save { background: var(--gradient-purple); color: #fff; border: none; }
+        .btn-save:hover { opacity: 0.9; }
+        .btn-submit-test { background: var(--red); color: #fff; border: none; }
+        .btn-submit-test:hover { background: #dc2626; }
+
+        /* Confirm dialog */
+        .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; align-items: center; justify-content: center; }
+        .confirm-overlay.open { display: flex; }
+        .confirm-dialog {
+            background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 2rem; max-width: 420px; width: 90%; box-shadow: var(--shadow-xl); text-align: center;
+        }
+        .confirm-dialog h3 { color: var(--text-primary); margin-bottom: 0.75rem; font-size: 1.1rem; }
+        .confirm-dialog p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+        .confirm-actions { display: flex; gap: 12px; justify-content: center; }
+
+        /* Mobile */
+        .palette-toggle {
+            display: none; position: fixed; bottom: 80px; right: 16px; z-index: 200;
+            width: 48px; height: 48px; border-radius: 50%; background: var(--purple);
+            color: #fff; border: none; font-size: 1.2rem; cursor: pointer; box-shadow: var(--shadow-lg);
+        }
+        @media (max-width: 768px) {
+            .palette-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 260px; z-index: 400; }
+            .palette-panel.open { display: flex; }
+            .palette-toggle { display: flex; align-items: center; justify-content: center; }
+            .question-panel { padding: 1.25rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="test-container">
+    <div class="test-header">
+        <span class="logo"><i class="bi bi-diagram-3-fill"></i> Learn.ai</span>
+        <span class="title-text"><%= assignment.title %></span>
+        <div class="timer" id="timerDisplay">00:00:00</div>
+    </div>
+
+    <div class="test-body">
+        <div class="question-panel" id="questionPanel">
+            <div class="q-header">
+                <span class="q-number" id="qNumber">Q.1</span>
+                <span class="q-difficulty" id="qDifficulty">Medium</span>
+            </div>
+            <div class="q-text" id="qText"></div>
+            <div class="options-list" id="optionsList">
+                <label class="option-item" data-option="option1">
+                    <input type="radio" name="answer" value="option1">
+                    <span class="option-label-letter">A</span>
+                    <span class="option-text" id="optA"></span>
+                </label>
+                <label class="option-item" data-option="option2">
+                    <input type="radio" name="answer" value="option2">
+                    <span class="option-label-letter">B</span>
+                    <span class="option-text" id="optB"></span>
+                </label>
+                <label class="option-item" data-option="option3">
+                    <input type="radio" name="answer" value="option3">
+                    <span class="option-label-letter">C</span>
+                    <span class="option-text" id="optC"></span>
+                </label>
+                <label class="option-item" data-option="option4">
+                    <input type="radio" name="answer" value="option4">
+                    <span class="option-label-letter">D</span>
+                    <span class="option-text" id="optD"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="palette-panel" id="palettePanel">
+            <div class="palette-title">Questions</div>
+            <div class="palette-grid" id="paletteGrid"></div>
+            <div class="palette-legend">
+                <div class="palette-legend-title">Legend</div>
+                <div class="legend-items">
+                    <div class="legend-item"><span class="legend-swatch unattempted"></span> Unattempted</div>
+                    <div class="legend-item"><span class="legend-swatch answered"></span> Answered</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="palette-toggle" id="paletteToggle"><i class="bi bi-grid-3x3-gap-fill"></i></button>
+
+    <div class="test-footer">
+        <div style="display:flex;gap:8px;">
+            <button class="btn-test btn-clear" id="btnClear"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button class="btn-test btn-prev" id="btnPrev"><i class="bi bi-chevron-left"></i> Prev</button>
+            <button class="btn-test btn-save" id="btnNext">Next <i class="bi bi-chevron-right"></i></button>
+            <button class="btn-test btn-submit-test" id="btnSubmit"><i class="bi bi-check2-square"></i> Submit</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-dialog">
+        <h3><i class="bi bi-exclamation-triangle" style="color: var(--gold);"></i> Submit Assignment?</h3>
+        <p id="confirmMsg">Are you sure you want to submit?</p>
+        <div class="confirm-actions">
+            <button class="btn-test btn-clear" id="confirmCancel">Cancel</button>
+            <button class="btn-test btn-submit-test" id="confirmYes">Yes, Submit</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const questions = <%- JSON.stringify(questions) %>;
+    const answers = <%- JSON.stringify(answers) %>;
+    const startTimestamp = <%= startTimestamp %>;
+    const deadline = <%= deadline %>;
+    const assignmentId = <%= assignment.id %>;
+
+    let currentSeq = 1;
+    let submitting = false;
+
+    function getQ(seq) { return questions.find(q => q.seq === seq); }
+
+    // Build palette
+    function buildPalette() {
+        const grid = document.getElementById('paletteGrid');
+        grid.innerHTML = '';
+        for (let i = 1; i <= questions.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'palette-btn';
+            btn.textContent = i;
+            btn.dataset.seq = i;
+            btn.addEventListener('click', () => { currentSeq = i; render(); closePalette(); });
+            grid.appendChild(btn);
+        }
+    }
+
+    function updatePalette() {
+        document.querySelectorAll('.palette-btn').forEach(btn => {
+            const seq = btn.dataset.seq;
+            btn.className = 'palette-btn';
+            if (answers[seq]) btn.classList.add('answered');
+            if (parseInt(seq) === currentSeq) btn.classList.add('current');
+        });
+    }
+
+    function render() {
+        const q = getQ(currentSeq);
+        if (!q) return;
+        document.getElementById('qNumber').textContent = 'Q.' + q.seq;
+        const tierLabels = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+        const diffEl = document.getElementById('qDifficulty');
+        diffEl.textContent = tierLabels[q.difficulty_tier] || 'Medium';
+        diffEl.className = 'q-difficulty tier-' + q.difficulty_tier;
+        document.getElementById('qText').innerHTML = q.question_text;
+        document.getElementById('optA').innerHTML = q.option1;
+        document.getElementById('optB').innerHTML = q.option2;
+        document.getElementById('optC').innerHTML = q.option3;
+        document.getElementById('optD').innerHTML = q.option4;
+
+        const saved = answers[String(currentSeq)];
+        document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = (r.value === saved); });
+        document.querySelectorAll('.option-item').forEach(item => {
+            item.classList.toggle('selected', item.dataset.option === saved);
+        });
+        updatePalette();
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise([document.getElementById('questionPanel')]).catch(() => {});
+        }
+    }
+
+    // Option click
+    document.querySelectorAll('.option-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const val = item.dataset.option;
+            answers[String(currentSeq)] = val;
+            document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = (r.value === val); });
+            document.querySelectorAll('.option-item').forEach(i => { i.classList.toggle('selected', i.dataset.option === val); });
+            updatePalette();
+            await fetch(`/assignments/${assignmentId}/answer`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seq: currentSeq, answer: val }),
+            }).catch(e => console.error('Save failed:', e));
+        });
+    });
+
+    // Clear
+    document.getElementById('btnClear').addEventListener('click', async () => {
+        delete answers[String(currentSeq)];
+        document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = false; });
+        document.querySelectorAll('.option-item').forEach(i => { i.classList.remove('selected'); });
+        updatePalette();
+        await fetch(`/assignments/${assignmentId}/clear`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seq: currentSeq }),
+        }).catch(e => console.error('Clear failed:', e));
+    });
+
+    // Nav
+    document.getElementById('btnNext').addEventListener('click', () => {
+        if (currentSeq < questions.length) currentSeq++;
+        else currentSeq = 1;
+        render();
+    });
+    document.getElementById('btnPrev').addEventListener('click', () => {
+        if (currentSeq > 1) currentSeq--;
+        else currentSeq = questions.length;
+        render();
+    });
+
+    // Submit
+    document.getElementById('btnSubmit').addEventListener('click', () => {
+        const answered = Object.keys(answers).length;
+        const total = questions.length;
+        document.getElementById('confirmMsg').textContent =
+            `You have answered ${answered} of ${total} questions. Unanswered questions will score 0. Submit?`;
+        document.getElementById('confirmOverlay').classList.add('open');
+    });
+    document.getElementById('confirmCancel').addEventListener('click', () => {
+        document.getElementById('confirmOverlay').classList.remove('open');
+    });
+    document.getElementById('confirmYes').addEventListener('click', async () => {
+        if (submitting) return;
+        submitting = true;
+        document.getElementById('confirmOverlay').classList.remove('open');
+        try {
+            const res = await fetch(`/assignments/${assignmentId}/submit`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await res.json();
+            if (data.ok && data.redirect) window.location.href = data.redirect;
+        } catch (e) {
+            console.error('Submit failed:', e);
+            submitting = false;
+        }
+    });
+
+    // Timer (elapsed, not countdown)
+    function startTimer() {
+        const timerEl = document.getElementById('timerDisplay');
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+            const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+            const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+            const s = String(elapsed % 60).padStart(2, '0');
+            timerEl.textContent = `${h}:${m}:${s}`;
+
+            // Auto-submit if deadline passes
+            if (Date.now() >= deadline && !submitting) {
+                document.getElementById('confirmYes').click();
+            }
+        }, 1000);
+    }
+
+    // Mobile palette
+    function closePalette() {
+        document.getElementById('palettePanel').classList.remove('open');
+    }
+    document.getElementById('paletteToggle').addEventListener('click', () => {
+        document.getElementById('palettePanel').classList.toggle('open');
+    });
+
+    buildPalette();
+    render();
+    startTimer();
+})();
+</script>
+</body>
+</html>

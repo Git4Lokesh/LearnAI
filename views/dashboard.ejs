@@ -260,6 +260,14 @@
             <div class="legend-item"><div class="legend-dot" style="background:#6B7280"></div> Locked (prereqs needed)</div>
             <div class="legend-item"><div style="width:24px;height:2px;border-top:2px dashed #A855F7;flex-shrink:0"></div> Cross-Chapter Dependency</div>
         </div>
+        <!-- Assignments Widget -->
+        <div id="assignmentsWidget" style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:none;">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--gold);margin-bottom:0.5rem;font-weight:600;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-clipboard-check"></i> Assignments
+            </div>
+            <div id="assignmentsList" style="display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;"></div>
+        </div>
+
         <div class="sidebar-search">
             <i class="bi bi-search"></i>
             <input type="text" id="sidebarSearch" placeholder="Search units..." oninput="filterSidebarList(this.value)">
@@ -1778,6 +1786,39 @@ async function loadConceptStats(conceptId) {
         document.getElementById('infoLastPracticed').textContent = '—';
     }
 }
+
+// ── Assignments Widget ──
+(async function loadAssignments() {
+    try {
+        const res = await fetch('/api/assignments/pending');
+        const data = await res.json();
+        if (!data.assignments || data.assignments.length === 0) return;
+
+        const widget = document.getElementById('assignmentsWidget');
+        const list = document.getElementById('assignmentsList');
+        widget.style.display = 'block';
+
+        const statusColors = { Pending: 'var(--gold)', Completed: 'var(--green)', Missed: 'var(--red)' };
+        const statusIcons = { Pending: 'bi-clock', Completed: 'bi-check-circle', Missed: 'bi-x-circle' };
+
+        list.innerHTML = data.assignments.slice(0, 5).map(a => {
+            const dl = new Date(a.deadline);
+            const dlStr = dl.toLocaleDateString() + ' ' + dl.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+            const href = a.status === 'Completed' ? '/assignments/' + a.id + '/results' :
+                         a.status === 'Pending' ? '/assignments/' + a.id + '/take' : '#';
+            return '<a href="' + href + '" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;text-decoration:none;transition:all 0.2s;border:1px solid var(--border);background:var(--card);" onmouseenter="this.style.borderColor=\'var(--purple)\'" onmouseleave="this.style.borderColor=\'var(--border)\'">' +
+                '<i class="bi ' + statusIcons[a.status] + '" style="color:' + statusColors[a.status] + ';font-size:0.9rem;flex-shrink:0;"></i>' +
+                '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:0.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + a.title + '</div>' +
+                    '<div style="font-size:0.65rem;color:var(--text-dim);">' + a.question_count + 'Q · ' + dlStr + (a.score !== null ? ' · ' + a.score + '/' + a.max_score : '') + '</div>' +
+                '</div>' +
+                '<span style="font-size:0.65rem;font-weight:600;color:' + statusColors[a.status] + ';flex-shrink:0;">' + a.status + '</span>' +
+            '</a>';
+        }).join('');
+    } catch (e) {
+        console.error('Failed to load assignments:', e);
+    }
+})();
 </script>
 </body>
 </html>
