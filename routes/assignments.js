@@ -527,6 +527,86 @@ router.get('/assignments/:id/results', ensureAuthenticated, async (req, res) => 
 
 
 // ═══════════════════════════════════════════════════════════════
+// STUDENT: PRACTICE MODE (re-attempt after submission)
+// ═══════════════════════════════════════════════════════════════
+
+// GET /assignments/:id/practice — practice mode for completed assignment
+router.get('/assignments/:id/practice', ensureAuthenticated, async (req, res) => {
+    try {
+        const assignmentId = parseInt(req.params.id);
+        const userId = req.user.id;
+
+        // Must have an existing submission
+        const subResult = await db.query(
+            `SELECT s.*, a.title, a.deadline, b.name AS batch_name
+             FROM assignment_submissions s
+             JOIN assignments a ON a.id = s.assignment_id
+             JOIN batches b ON b.id = a.batch_id
+             WHERE s.assignment_id = $1 AND s.user_id = $2`,
+            [assignmentId, userId]
+        );
+        if (subResult.rowCount === 0) {
+            return res.redirect(`/assignments/${assignmentId}/take`);
+        }
+        const submission = subResult.rows[0];
+
+        // Load questions with full details
+        const qResult = await db.query(`
+            SELECT q.id, q.question_text, q.option1, q.option2, q.option3, q.option4,
+                   q.correct_answer, q.concept_id, q.difficulty_tier, aq.question_order,
+                   c.name AS concept_name
+            FROM assignment_questions aq
+            JOIN questions q ON q.id = aq.question_id
+            LEFT JOIN concepts c ON c.id = q.concept_id
+            WHERE aq.assignment_id = $1
+            ORDER BY aq.question_order
+        `, [assignmentId]);
+
+        // Load student's previous answers
+        const answersResult = await db.query(`
+            SELECT aa.question_id, aa.selected_option, aa.is_correct
+            FROM assignment_answers aa
+            WHERE aa.submission_id = $1
+        `, [submission.id]);
+
+        const prevAnswerMap = {};
+        for (const ans of answersResult.rows) {
+            prevAnswerMap[ans.question_id] = {
+                selected: ans.selected_option,
+                isCorrect: ans.is_correct,
+            };
+        }
+
+        const questions = qResult.rows.map(q => ({
+            seq: q.question_order,
+            id: q.id,
+            question_text: q.question_text,
+            option1: q.option1,
+            option2: q.option2,
+            option3: q.option3,
+            option4: q.option4,
+            correct_answer: q.correct_answer,
+            difficulty_tier: q.difficulty_tier,
+            concept_id: q.concept_id,
+            concept_name: q.concept_name,
+            prev_selected: prevAnswerMap[q.id]?.selected || null,
+            prev_correct: prevAnswerMap[q.id]?.isCorrect || false,
+        }));
+
+        res.render('assignment-practice.ejs', {
+            user: req.user,
+            submission,
+            questions,
+            assignmentId,
+        });
+    } catch (err) {
+        console.error('Error loading practice mode:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+
+// ═══════════════════════════════════════════════════════════════
 // TEACHER: VIEW INDIVIDUAL STUDENT SUBMISSION
 // ═══════════════════════════════════════════════════════════════
 

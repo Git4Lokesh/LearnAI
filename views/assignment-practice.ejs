@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Practice — <%= submission.title %> — Learn.ai</title>
+    <link rel="stylesheet" href="/css/theme.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$'],['\\[','\\]']], processEscapes: true },
+      options: { renderActions: { addMenu: [] } }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        .test-container { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+        .test-header {
+            background: var(--gradient-header); border-bottom: 1px solid var(--border);
+            padding: 0 1.5rem; height: 56px; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0; z-index: 100;
+        }
+        .test-header .logo { color: var(--gold); font-weight: 700; font-size: 1.15rem; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .test-header .title-text { color: var(--text-primary); font-weight: 600; font-size: 0.9rem; }
+        .practice-badge {
+            font-size: 0.7rem; font-weight: 600; padding: 4px 12px; border-radius: var(--radius-pill);
+            background: rgba(124,58,237,0.15); color: var(--purple-light); border: 1px solid rgba(124,58,237,0.3);
+            letter-spacing: 0.5px; text-transform: uppercase;
+        }
+
+        .test-body { display: flex; flex: 1; overflow: hidden; }
+
+        .question-panel { flex: 1; overflow-y: auto; padding: 2rem 2.5rem; display: flex; flex-direction: column; }
+        .q-header { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .q-number { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+        .q-difficulty { font-size: 0.7rem; font-weight: 600; padding: 3px 10px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: 0.5px; }
+        .q-difficulty.tier-easy { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+        .q-difficulty.tier-medium { background: rgba(245,158,11,0.15); color: var(--gold); border: 1px solid rgba(245,158,11,0.3); }
+        .q-difficulty.tier-hard { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+        .q-concept { font-size: 0.72rem; color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
+        .prev-badge {
+            font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill);
+        }
+        .prev-badge.was-wrong { background: rgba(239,68,68,0.12); color: var(--red); }
+        .prev-badge.was-correct { background: rgba(16,185,129,0.12); color: var(--green); }
+        .prev-badge.was-unanswered { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+
+        .q-text { font-size: 1.05rem; line-height: 1.7; color: var(--text); margin-bottom: 1.5rem; }
+
+        .options-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
+        .option-item {
+            display: flex; align-items: flex-start; gap: 14px;
+            background: var(--glass-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            padding: 14px 18px; cursor: pointer; transition: var(--transition-slow);
+            position: relative; overflow: hidden;
+        }
+        .option-item::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(245,158,11,0.05) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .option-item:hover::before { opacity: 1; }
+        .option-item:hover:not(.revealed) { border-color: rgba(245,158,11,0.3); box-shadow: var(--shadow-md), var(--shadow-glow-gold); transform: translateY(-1px); }
+        .option-item.selected:not(.revealed) { border-color: var(--purple); background: rgba(124,58,237,0.1); box-shadow: var(--shadow-glow-purple); }
+        .option-item input[type="radio"] { display: none; }
+        .option-label-letter {
+            width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.82rem; flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary);
+        }
+        .option-item.selected:not(.revealed) .option-label-letter { background: var(--purple); border-color: var(--purple); color: #fff; }
+        .option-text { font-size: 0.95rem; line-height: 1.5; color: var(--text); padding-top: 3px; flex: 1; }
+        .option-feedback { flex-shrink: 0; font-size: 1rem; margin-top: 2px; display: none; }
+
+        /* Revealed states (after checking answer) */
+        .option-item.revealed { cursor: default; pointer-events: none; }
+        .option-item.revealed.is-correct {
+            border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.08);
+        }
+        .option-item.revealed.is-correct .option-label-letter {
+            background: var(--green); border-color: var(--green); color: #fff;
+        }
+        .option-item.revealed.is-correct .option-text { color: var(--green); font-weight: 500; }
+        .option-item.revealed.is-correct .option-feedback { display: block; }
+
+        .option-item.revealed.is-wrong {
+            border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06);
+        }
+        .option-item.revealed.is-wrong .option-label-letter {
+            background: var(--red); border-color: var(--red); color: #fff;
+        }
+        .option-item.revealed.is-wrong .option-text { color: var(--red); }
+        .option-item.revealed.is-wrong .option-feedback { display: block; }
+
+        .option-item.revealed.is-neutral { opacity: 0.5; }
+
+        /* Feedback banner after checking */
+        .feedback-banner {
+            display: none; padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 1rem;
+            font-size: 0.88rem; font-weight: 600; align-items: center; gap: 10px;
+        }
+        .feedback-banner.show { display: flex; }
+        .feedback-banner.correct-banner { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: var(--green); }
+        .feedback-banner.wrong-banner { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+
+        /* Palette */
+        .palette-panel {
+            width: 260px; flex-shrink: 0; background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-left: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; overflow-y: auto;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+        }
+        .palette-title { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; padding: 12px 16px 6px; }
+        .palette-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 4px 16px 12px; }
+        .palette-btn {
+            width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--card); color: var(--text-muted); font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center;
+        }
+        .palette-btn:hover { border-color: var(--purple-light); transform: scale(1.08); }
+        .palette-btn.current { outline: 2px solid var(--cyan); outline-offset: 1px; }
+        .palette-btn.prev-wrong { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: var(--red); }
+        .palette-btn.prev-correct { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: var(--green); }
+        .palette-btn.practiced { background: var(--purple); border-color: var(--purple); color: #fff; }
+
+        .palette-legend { padding: 12px 16px; border-top: 1px solid var(--border); margin-top: auto; }
+        .palette-legend-title { font-size: 0.7rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+        .legend-items { display: flex; flex-direction: column; gap: 6px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; color: var(--text-muted); }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+        .legend-swatch.prev-wrong { background: rgba(239,68,68,0.3); border: 1px solid rgba(239,68,68,0.4); }
+        .legend-swatch.prev-correct { background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.3); }
+        .legend-swatch.practiced { background: var(--purple); }
+        .legend-swatch.unattempted { background: var(--card); border: 1px solid var(--border); }
+
+        /* Footer */
+        .test-footer {
+            background: var(--surface); border-top: 1px solid var(--border);
+            padding: 12px 1.5rem; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0; gap: 8px; flex-wrap: wrap;
+        }
+        .btn-test {
+            padding: 10px 18px; border-radius: var(--radius-sm); font-size: 0.82rem;
+            font-weight: 600; cursor: pointer; transition: var(--transition); border: 1px solid var(--border);
+        }
+        .btn-prev { background: var(--card); color: var(--text-secondary); }
+        .btn-prev:hover { background: rgba(255,255,255,0.05); }
+        .btn-check { background: var(--gradient-purple); color: #fff; border: none; }
+        .btn-check:hover { opacity: 0.9; }
+        .btn-next-q { background: var(--card); color: var(--text-secondary); }
+        .btn-next-q:hover { background: rgba(255,255,255,0.05); }
+        .btn-back-results { background: rgba(245,158,11,0.1); color: var(--gold); border-color: rgba(245,158,11,0.3); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-back-results:hover { background: rgba(245,158,11,0.2); }
+
+        /* Mobile */
+        .palette-toggle {
+            display: none; position: fixed; bottom: 80px; right: 16px; z-index: 200;
+            width: 48px; height: 48px; border-radius: 50%; background: var(--purple);
+            color: #fff; border: none; font-size: 1.2rem; cursor: pointer; box-shadow: var(--shadow-lg);
+        }
+        @media (max-width: 768px) {
+            .palette-panel { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 260px; z-index: 400; }
+            .palette-panel.open { display: flex; }
+            .palette-toggle { display: flex; align-items: center; justify-content: center; }
+            .question-panel { padding: 1.25rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="test-container">
+    <div class="test-header">
+        <span class="logo"><i class="bi bi-diagram-3-fill"></i> Learn.ai</span>
+        <span class="title-text"><%= submission.title %></span>
+        <span class="practice-badge"><i class="bi bi-arrow-repeat"></i> Practice Mode</span>
+    </div>
+
+    <div class="test-body">
+        <div class="question-panel" id="questionPanel">
+            <div class="q-header">
+                <span class="q-number" id="qNumber">Q.1</span>
+                <span class="q-difficulty" id="qDifficulty">Medium</span>
+                <span class="prev-badge" id="prevBadge"></span>
+            </div>
+            <div class="q-concept" id="qConcept"></div>
+            <div class="q-text" id="qText"></div>
+
+            <div class="feedback-banner" id="feedbackBanner"></div>
+
+            <div class="options-list" id="optionsList">
+                <label class="option-item" data-option="option1">
+                    <input type="radio" name="answer" value="option1">
+                    <span class="option-label-letter">A</span>
+                    <span class="option-text" id="optA"></span>
+                    <span class="option-feedback" id="fbA"></span>
+                </label>
+                <label class="option-item" data-option="option2">
+                    <input type="radio" name="answer" value="option2">
+                    <span class="option-label-letter">B</span>
+                    <span class="option-text" id="optB"></span>
+                    <span class="option-feedback" id="fbB"></span>
+                </label>
+                <label class="option-item" data-option="option3">
+                    <input type="radio" name="answer" value="option3">
+                    <span class="option-label-letter">C</span>
+                    <span class="option-text" id="optC"></span>
+                    <span class="option-feedback" id="fbC"></span>
+                </label>
+                <label class="option-item" data-option="option4">
+                    <input type="radio" name="answer" value="option4">
+                    <span class="option-label-letter">D</span>
+                    <span class="option-text" id="optD"></span>
+                    <span class="option-feedback" id="fbD"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="palette-panel" id="palettePanel">
+            <div class="palette-title">Questions</div>
+            <div class="palette-grid" id="paletteGrid"></div>
+            <div class="palette-legend">
+                <div class="palette-legend-title">Legend</div>
+                <div class="legend-items">
+                    <div class="legend-item"><span class="legend-swatch prev-wrong"></span> Previously Wrong</div>
+                    <div class="legend-item"><span class="legend-swatch prev-correct"></span> Previously Correct</div>
+                    <div class="legend-item"><span class="legend-swatch practiced"></span> Practiced</div>
+                    <div class="legend-item"><span class="legend-swatch unattempted"></span> Not Attempted</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="palette-toggle" id="paletteToggle"><i class="bi bi-grid-3x3-gap-fill"></i></button>
+
+    <div class="test-footer">
+        <a href="/assignments/<%= assignmentId %>/results" class="btn-test btn-back-results">
+            <i class="bi bi-arrow-left"></i> Back to Results
+        </a>
+        <div style="display:flex;gap:8px;">
+            <button class="btn-test btn-prev" id="btnPrev"><i class="bi bi-chevron-left"></i> Prev</button>
+            <button class="btn-test btn-check" id="btnCheck"><i class="bi bi-eye"></i> Check Answer</button>
+            <button class="btn-test btn-next-q" id="btnNext">Next <i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const questions = <%- JSON.stringify(questions) %>;
+    const assignmentId = <%= assignmentId %>;
+
+    let currentSeq = 1;
+    let practiceAnswers = {};   // seq -> selected option
+    let revealed = {};          // seq -> true (answer checked)
+
+    // Find the first previously-wrong question to start with
+    const firstWrong = questions.find(q => q.prev_selected && !q.prev_correct);
+    if (firstWrong) currentSeq = firstWrong.seq;
+
+    function getQ(seq) { return questions.find(q => q.seq === seq); }
+
+    function buildPalette() {
+        const grid = document.getElementById('paletteGrid');
+        grid.innerHTML = '';
+        for (let i = 1; i <= questions.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'palette-btn';
+            btn.textContent = i;
+            btn.dataset.seq = i;
+            btn.addEventListener('click', () => { currentSeq = i; render(); closePalette(); });
+            grid.appendChild(btn);
+        }
+    }
+
+    function updatePalette() {
+        document.querySelectorAll('.palette-btn').forEach(btn => {
+            const seq = parseInt(btn.dataset.seq);
+            const q = getQ(seq);
+            btn.className = 'palette-btn';
+
+            if (revealed[seq]) {
+                btn.classList.add('practiced');
+            } else if (q && q.prev_selected && !q.prev_correct) {
+                btn.classList.add('prev-wrong');
+            } else if (q && q.prev_correct) {
+                btn.classList.add('prev-correct');
+            }
+
+            if (seq === currentSeq) btn.classList.add('current');
+        });
+    }
+
+    function render() {
+        const q = getQ(currentSeq);
+        if (!q) return;
+
+        document.getElementById('qNumber').textContent = 'Q.' + q.seq;
+
+        // Difficulty
+        const tier = q.difficulty_tier || 5;
+        const diffLabel = tier <= 3.3 ? 'Easy' : tier <= 6.6 ? 'Medium' : 'Hard';
+        const diffClass = tier <= 3.3 ? 'tier-easy' : tier <= 6.6 ? 'tier-medium' : 'tier-hard';
+        const diffEl = document.getElementById('qDifficulty');
+        diffEl.textContent = diffLabel;
+        diffEl.className = 'q-difficulty ' + diffClass;
+
+        // Previous attempt badge
+        const prevBadge = document.getElementById('prevBadge');
+        if (q.prev_selected && q.prev_correct) {
+            prevBadge.textContent = '✓ Previously Correct';
+            prevBadge.className = 'prev-badge was-correct';
+        } else if (q.prev_selected && !q.prev_correct) {
+            prevBadge.textContent = '✗ Previously Wrong';
+            prevBadge.className = 'prev-badge was-wrong';
+        } else {
+            prevBadge.textContent = '— Previously Unanswered';
+            prevBadge.className = 'prev-badge was-unanswered';
+        }
+
+        // Concept name
+        const conceptEl = document.getElementById('qConcept');
+        if (q.concept_name) {
+            conceptEl.innerHTML = '<i class="bi bi-tag"></i> ' + q.concept_name;
+            conceptEl.style.display = 'flex';
+            conceptEl.style.marginBottom = '1rem';
+        } else {
+            conceptEl.style.display = 'none';
+        }
+
+        document.getElementById('qText').innerHTML = q.question_text;
+        document.getElementById('optA').innerHTML = q.option1;
+        document.getElementById('optB').innerHTML = q.option2;
+        document.getElementById('optC').innerHTML = q.option3;
+        document.getElementById('optD').innerHTML = q.option4;
+
+        // Reset all option states
+        const items = document.querySelectorAll('.option-item');
+        items.forEach(item => {
+            item.classList.remove('selected', 'revealed', 'is-correct', 'is-wrong', 'is-neutral');
+            item.style.pointerEvents = '';
+        });
+        document.querySelectorAll('.option-feedback').forEach(fb => { fb.innerHTML = ''; fb.style.display = 'none'; });
+
+        // Feedback banner
+        const banner = document.getElementById('feedbackBanner');
+        banner.className = 'feedback-banner';
+        banner.textContent = '';
+
+        // Check button state
+        const btnCheck = document.getElementById('btnCheck');
+        btnCheck.disabled = false;
+        btnCheck.innerHTML = '<i class="bi bi-eye"></i> Check Answer';
+
+        if (revealed[currentSeq]) {
+            // Show revealed state
+            revealAnswer(q);
+        } else {
+            // Show selected state
+            const saved = practiceAnswers[String(currentSeq)];
+            if (saved) {
+                document.querySelectorAll('.option-item').forEach(item => {
+                    item.classList.toggle('selected', item.dataset.option === saved);
+                });
+            }
+        }
+
+        updatePalette();
+
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise([document.getElementById('questionPanel')]).catch(() => {});
+        }
+    }
+
+    function revealAnswer(q) {
+        const selected = practiceAnswers[String(currentSeq)];
+        const items = document.querySelectorAll('.option-item');
+
+        items.forEach(item => {
+            const optVal = item.dataset.option;
+            item.classList.add('revealed');
+
+            if (optVal === q.correct_answer) {
+                item.classList.add('is-correct');
+                item.querySelector('.option-feedback').innerHTML = '<i class="bi bi-check-circle-fill" style="color:var(--green);"></i>';
+                item.querySelector('.option-feedback').style.display = 'block';
+            } else if (optVal === selected && optVal !== q.correct_answer) {
+                item.classList.add('is-wrong');
+                item.querySelector('.option-feedback').innerHTML = '<i class="bi bi-x-circle-fill" style="color:var(--red);"></i>';
+                item.querySelector('.option-feedback').style.display = 'block';
+            } else {
+                item.classList.add('is-neutral');
+            }
+        });
+
+        // Feedback banner
+        const banner = document.getElementById('feedbackBanner');
+        const isCorrect = selected === q.correct_answer;
+        if (!selected) {
+            banner.className = 'feedback-banner show wrong-banner';
+            banner.innerHTML = '<i class="bi bi-info-circle"></i> You didn\'t select an answer. The correct answer is highlighted.';
+        } else if (isCorrect) {
+            banner.className = 'feedback-banner show correct-banner';
+            banner.innerHTML = '<i class="bi bi-check-circle-fill"></i> Correct! Well done.';
+        } else {
+            const labels = { option1: 'A', option2: 'B', option3: 'C', option4: 'D' };
+            banner.className = 'feedback-banner show wrong-banner';
+            banner.innerHTML = '<i class="bi bi-x-circle-fill"></i> Incorrect. The correct answer is <strong>' + (labels[q.correct_answer] || '?') + '</strong>.';
+        }
+
+        // Disable check button
+        const btnCheck = document.getElementById('btnCheck');
+        btnCheck.disabled = true;
+        btnCheck.innerHTML = '<i class="bi bi-check2"></i> Checked';
+    }
+
+    // Option click (only when not revealed)
+    document.querySelectorAll('.option-item').forEach(item => {
+        item.addEventListener('click', () => {
+            if (revealed[currentSeq]) return;
+            const val = item.dataset.option;
+            practiceAnswers[String(currentSeq)] = val;
+            document.querySelectorAll('.option-item').forEach(i => {
+                i.classList.toggle('selected', i.dataset.option === val);
+            });
+        });
+    });
+
+    // Check answer
+    document.getElementById('btnCheck').addEventListener('click', () => {
+        if (revealed[currentSeq]) return;
+        revealed[currentSeq] = true;
+        const q = getQ(currentSeq);
+        revealAnswer(q);
+        updatePalette();
+    });
+
+    // Nav
+    document.getElementById('btnNext').addEventListener('click', () => {
+        if (currentSeq < questions.length) currentSeq++;
+        else currentSeq = 1;
+        render();
+    });
+    document.getElementById('btnPrev').addEventListener('click', () => {
+        if (currentSeq > 1) currentSeq--;
+        else currentSeq = questions.length;
+        render();
+    });
+
+    // Mobile palette
+    function closePalette() {
+        document.getElementById('palettePanel').classList.remove('open');
+    }
+    document.getElementById('paletteToggle').addEventListener('click', () => {
+        document.getElementById('palettePanel').classList.toggle('open');
+    });
+
+    buildPalette();
+    render();
+})();
+</script>
+</body>
+</html>

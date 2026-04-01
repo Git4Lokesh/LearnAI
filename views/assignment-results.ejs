@@ -41,6 +41,38 @@
 
         .time-info { color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; }
 
+        /* Action Buttons */
+        .action-buttons { display: flex; justify-content: center; gap: 12px; margin-top: 1.25rem; flex-wrap: wrap; }
+        .btn-action {
+            display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px;
+            border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition); text-decoration: none; border: 1px solid var(--border);
+        }
+        .btn-practice { background: var(--gradient-purple); color: #fff; border: none; }
+        .btn-practice:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-glow-purple); }
+        .btn-errors { background: rgba(239,68,68,0.12); color: var(--red); border-color: rgba(239,68,68,0.3); }
+        .btn-errors:hover { background: rgba(239,68,68,0.2); }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex; gap: 4px; margin-bottom: 1.25rem; background: var(--surface);
+            border-radius: var(--radius); padding: 4px; border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        .filter-tab {
+            padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition); border: none; background: transparent;
+            color: var(--text-muted); white-space: nowrap; display: flex; align-items: center; gap: 6px;
+        }
+        .filter-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+        .filter-tab.active { background: var(--glass-bg); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+        .filter-tab .tab-count {
+            font-size: 0.68rem; background: rgba(255,255,255,0.08); padding: 1px 6px;
+            border-radius: var(--radius-pill); color: var(--text-dim);
+        }
+        .filter-tab.active .tab-count { background: rgba(245,158,11,0.15); color: var(--gold); }
+
+        /* Answer Cards */
         .answer-list { display: flex; flex-direction: column; gap: 1rem; }
         .answer-card {
             background: var(--glass-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -58,20 +90,83 @@
         .answer-card.wrong-card { border-left: 4px solid var(--red); }
         .answer-card.unanswered-card { border-left: 4px solid var(--text-dim); }
 
-        .answer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .answer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
         .answer-q-num { font-weight: 700; color: var(--text-primary); font-size: 0.9rem; }
         .answer-badge { font-size: 0.7rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-pill); }
         .answer-badge.correct { background: rgba(16,185,129,0.15); color: var(--green); }
         .answer-badge.wrong { background: rgba(239,68,68,0.15); color: var(--red); }
         .answer-badge.skip { background: rgba(255,255,255,0.05); color: var(--text-dim); }
 
-        .answer-q-text { font-size: 0.92rem; color: var(--text); line-height: 1.6; margin-bottom: 0.75rem; }
-        .answer-detail { font-size: 0.82rem; color: var(--text-muted); }
-        .answer-detail .your-ans { color: var(--text-secondary); }
-        .answer-detail .correct-ans { color: var(--green); font-weight: 600; }
+        .answer-q-text { font-size: 0.92rem; color: var(--text); line-height: 1.6; margin-bottom: 1rem; }
+
+        /* Difficulty badge */
+        .diff-badge {
+            font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .diff-badge.easy { background: rgba(16,185,129,0.12); color: var(--green); }
+        .diff-badge.medium { background: rgba(245,158,11,0.12); color: var(--gold); }
+        .diff-badge.hard { background: rgba(239,68,68,0.12); color: var(--red); }
+
+        /* Options display */
+        .options-review { display: flex; flex-direction: column; gap: 6px; margin-bottom: 0.75rem; }
+        .option-row {
+            display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px;
+            border-radius: var(--radius-sm); border: 1px solid var(--border);
+            background: var(--card); font-size: 0.88rem; color: var(--text-muted);
+            transition: var(--transition); position: relative;
+        }
+        .option-row .opt-letter {
+            width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.72rem; flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border); color: var(--text-dim);
+        }
+        .option-row .opt-text { flex: 1; line-height: 1.5; color: var(--text-muted); padding-top: 1px; }
+        .option-row .opt-icon { font-size: 0.85rem; flex-shrink: 0; margin-top: 2px; }
+
+        /* Correct answer option */
+        .option-row.is-correct {
+            border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.06);
+        }
+        .option-row.is-correct .opt-letter {
+            background: var(--green); border-color: var(--green); color: #fff;
+        }
+        .option-row.is-correct .opt-text { color: var(--green); font-weight: 500; }
+
+        /* Student's wrong selection */
+        .option-row.is-wrong-selected {
+            border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06);
+        }
+        .option-row.is-wrong-selected .opt-letter {
+            background: var(--red); border-color: var(--red); color: #fff;
+        }
+        .option-row.is-wrong-selected .opt-text { color: var(--red); }
+
+        /* Student's correct selection */
+        .option-row.is-correct-selected {
+            border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.08);
+        }
+        .option-row.is-correct-selected .opt-letter {
+            background: var(--green); border-color: var(--green); color: #fff;
+        }
+        .option-row.is-correct-selected .opt-text { color: var(--green); font-weight: 600; }
+
+        .answer-meta { font-size: 0.78rem; color: var(--text-dim); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
         .btn-back { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 1rem; }
         .btn-back:hover { color: var(--text-secondary); }
+
+        /* Review header */
+        .review-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px; }
+        .review-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 600px) {
+            .score-stats { gap: 1rem; }
+            .filter-tabs { flex-wrap: nowrap; }
+            .action-buttons { flex-direction: column; align-items: center; }
+        }
     </style>
 </head>
 <body>
@@ -99,34 +194,118 @@
                 <%= Math.floor(submission.time_taken_seconds / 60) %>m <%= submission.time_taken_seconds % 60 %>s
             </div>
         <% } %>
+
+        <div class="action-buttons">
+            <a href="/assignments/<%= submission.assignment_id %>/practice" class="btn-action btn-practice">
+                <i class="bi bi-arrow-repeat"></i> Practice Again
+            </a>
+            <% if (wrongCount > 0) { %>
+            <button class="btn-action btn-errors" onclick="filterTo('wrong')">
+                <i class="bi bi-exclamation-circle"></i> Review <%= wrongCount %> Error<%= wrongCount > 1 ? 's' : '' %>
+            </button>
+            <% } %>
+        </div>
     </div>
 
-    <h2 style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem;">Question Review</h2>
-    <div class="answer-list">
+    <div class="review-header">
+        <span class="review-title">Question Review</span>
+    </div>
+
+    <div class="filter-tabs" id="filterTabs">
+        <button class="filter-tab active" data-filter="all" onclick="filterTo('all')">
+            All <span class="tab-count"><%= answers.length %></span>
+        </button>
+        <button class="filter-tab" data-filter="correct" onclick="filterTo('correct')">
+            <i class="bi bi-check-circle" style="color:var(--green);"></i> Correct <span class="tab-count"><%= correctCount %></span>
+        </button>
+        <button class="filter-tab" data-filter="wrong" onclick="filterTo('wrong')">
+            <i class="bi bi-x-circle" style="color:var(--red);"></i> Wrong <span class="tab-count"><%= wrongCount %></span>
+        </button>
+        <button class="filter-tab" data-filter="unanswered" onclick="filterTo('unanswered')">
+            <i class="bi bi-dash-circle" style="color:var(--text-dim);"></i> Unanswered <span class="tab-count"><%= unansweredCount %></span>
+        </button>
+    </div>
+
+    <div class="answer-list" id="answerList">
         <% answers.forEach((a, i) => {
             const optionLabels = { option1: 'A', option2: 'B', option3: 'C', option4: 'D' };
+            const optionKeys = ['option1', 'option2', 'option3', 'option4'];
             let cardClass = 'unanswered-card';
             let badgeClass = 'skip';
             let badgeText = 'Unanswered';
-            if (a.selected_option && a.is_correct) { cardClass = 'correct-card'; badgeClass = 'correct'; badgeText = '+4'; }
-            else if (a.selected_option && !a.is_correct) { cardClass = 'wrong-card'; badgeClass = 'wrong'; badgeText = '−1'; }
+            let filterType = 'unanswered';
+            if (a.selected_option && a.is_correct) { cardClass = 'correct-card'; badgeClass = 'correct'; badgeText = '+4'; filterType = 'correct'; }
+            else if (a.selected_option && !a.is_correct) { cardClass = 'wrong-card'; badgeClass = 'wrong'; badgeText = '−1'; filterType = 'wrong'; }
+
+            const diffTier = a.difficulty_tier || 2;
+            const diffLabel = diffTier <= 3.3 ? 'Easy' : diffTier <= 6.6 ? 'Medium' : 'Hard';
+            const diffClass = diffTier <= 3.3 ? 'easy' : diffTier <= 6.6 ? 'medium' : 'hard';
         %>
-            <div class="answer-card <%= cardClass %>">
+            <div class="answer-card <%= cardClass %>" data-filter-type="<%= filterType %>">
                 <div class="answer-header">
-                    <span class="answer-q-num">Q.<%= a.question_order %></span>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="answer-q-num">Q.<%= a.question_order %></span>
+                        <span class="diff-badge <%= diffClass %>"><%= diffLabel %></span>
+                    </div>
                     <span class="answer-badge <%= badgeClass %>"><%= badgeText %></span>
                 </div>
                 <div class="answer-q-text"><%- a.question_text %></div>
-                <div class="answer-detail">
-                    <% if (a.selected_option) { %>
-                        Your answer: <span class="your-ans"><%= optionLabels[a.selected_option] || a.selected_option %></span> · 
+
+                <div class="options-review">
+                <% optionKeys.forEach(optKey => {
+                    const letter = optionLabels[optKey];
+                    const isCorrectAnswer = (a.correct_answer === optKey);
+                    const isStudentChoice = (a.selected_option === optKey);
+                    let rowClass = '';
+                    let icon = '';
+                    if (isCorrectAnswer && isStudentChoice) {
+                        rowClass = 'is-correct-selected';
+                        icon = '<i class="bi bi-check-circle-fill opt-icon" style="color:var(--green);"></i>';
+                    } else if (isCorrectAnswer) {
+                        rowClass = 'is-correct';
+                        icon = '<i class="bi bi-check-circle opt-icon" style="color:var(--green);"></i>';
+                    } else if (isStudentChoice && !isCorrectAnswer) {
+                        rowClass = 'is-wrong-selected';
+                        icon = '<i class="bi bi-x-circle-fill opt-icon" style="color:var(--red);"></i>';
+                    }
+                %>
+                    <div class="option-row <%= rowClass %>">
+                        <span class="opt-letter"><%= letter %></span>
+                        <span class="opt-text"><%- a[optKey] %></span>
+                        <%- icon %>
+                    </div>
+                <% }); %>
+                </div>
+
+                <div class="answer-meta">
+                    <% if (a.concept_name) { %>
+                        <span><i class="bi bi-tag"></i> <%= a.concept_name %></span>
                     <% } %>
-                    Correct: <span class="correct-ans"><%= optionLabels[a.correct_answer] || a.correct_answer %></span>
-                    <% if (a.concept_name) { %> · <span style="color:var(--text-dim);"><%= a.concept_name %></span><% } %>
                 </div>
             </div>
         <% }); %>
     </div>
 </div>
+
+<script>
+function filterTo(type) {
+    // Update tabs
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.filter === type);
+    });
+    // Filter cards
+    document.querySelectorAll('.answer-card').forEach(card => {
+        if (type === 'all') {
+            card.classList.remove('hidden');
+        } else {
+            card.classList.toggle('hidden', card.dataset.filterType !== type);
+        }
+    });
+    // Re-render MathJax for visible cards
+    if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise([document.getElementById('answerList')]).catch(() => {});
+    }
+}
+</script>
 </body>
 </html>
