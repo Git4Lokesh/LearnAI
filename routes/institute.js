@@ -261,8 +261,8 @@ router.post("/institute/invite-teachers", ensureAuthenticated, ensureInstituteAd
     }
 });
 
-// Institute batches management (admin only)
-router.get("/institute/batches", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
+// Institute batches management (admin and teachers)
+router.get("/institute/batches", ensureAuthenticated, ensureInstituteUser, async (req, res) => {
     try {
         const instituteId = req.user.institute_id;
 
@@ -306,7 +306,7 @@ router.get("/institute/batches", ensureAuthenticated, ensureInstituteAdmin, asyn
     }
 });
 
-router.post("/institute/batches", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
+router.post("/institute/batches", ensureAuthenticated, ensureInstituteUser, async (req, res) => {
     try {
         const instituteId = req.user.institute_id;
         const { action } = req.body;

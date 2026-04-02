@@ -268,6 +268,14 @@
             <div id="assignmentsList" style="display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;"></div>
         </div>
 
+        <!-- Weakness Heatmap Widget (Feature 13) -->
+        <div id="weaknessWidget" style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:none;">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--red);margin-bottom:0.5rem;font-weight:600;display:flex;align-items:center;gap:6px;">
+                <i class="bi bi-fire"></i> Weakness Heatmap
+            </div>
+            <div id="weaknessList" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;"></div>
+        </div>
+
         <div class="sidebar-search">
             <i class="bi bi-search"></i>
             <input type="text" id="sidebarSearch" placeholder="Search units..." oninput="filterSidebarList(this.value)">
@@ -1817,6 +1825,34 @@ async function loadConceptStats(conceptId) {
         }).join('');
     } catch (e) {
         console.error('Failed to load assignments:', e);
+    }
+})();
+
+// ── Weakness Heatmap Widget (Feature 13) ──
+(async function loadWeaknessHeatmap() {
+    try {
+        const res = await fetch('/api/student/weakness-heatmap');
+        const data = await res.json();
+        if (!data.concepts || data.concepts.length === 0) return;
+
+        const widget = document.getElementById('weaknessWidget');
+        const list = document.getElementById('weaknessList');
+        widget.style.display = 'block';
+
+        list.innerHTML = data.concepts.slice(0, 10).map(c => {
+            const barColor = c.accuracy >= 80 ? 'var(--green)' : c.accuracy >= 50 ? 'var(--gold)' : 'var(--red)';
+            return '<a href="/practice/' + c.concept_id + '" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;text-decoration:none;transition:all 0.2s;" onmouseenter="this.style.background=\'rgba(239,68,68,0.08)\'" onmouseleave="this.style.background=\'none\'">' +
+                '<div style="width:8px;height:8px;border-radius:50%;background:' + barColor + ';flex-shrink:0;"></div>' +
+                '<span style="flex:1;font-size:0.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.concept_name + '</span>' +
+                '<span style="font-size:0.65rem;color:var(--text-dim);flex-shrink:0;">' + c.correct + '/' + c.total + '</span>' +
+                '<div style="width:50px;height:5px;background:var(--border);border-radius:3px;overflow:hidden;flex-shrink:0;">' +
+                    '<div style="width:' + c.accuracy + '%;height:100%;background:' + barColor + ';border-radius:3px;"></div>' +
+                '</div>' +
+                '<span style="font-size:0.68rem;font-weight:600;color:' + barColor + ';width:30px;text-align:right;flex-shrink:0;">' + c.accuracy + '%</span>' +
+            '</a>';
+        }).join('');
+    } catch (e) {
+        console.error('Failed to load weakness heatmap:', e);
     }
 })();
 </script>

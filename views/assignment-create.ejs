@@ -243,6 +243,21 @@
 (function() {
     const selectedQuestions = new Set();
     const allConcepts = <%- JSON.stringify(concepts) %>;
+    const prefillIds = <%- JSON.stringify(typeof prefillIds !== 'undefined' ? prefillIds : []) %>;
+
+    // Auto-select prefilled question IDs (from remedial assignment generation)
+    if (prefillIds.length > 0) {
+        prefillIds.forEach(id => selectedQuestions.add(id));
+        updateSelectedCount();
+        // Auto-trigger a search to show them
+        setTimeout(async () => {
+            try {
+                const res = await fetch('/api/assignments/questions?');
+                const data = await res.json();
+                renderQuestions(data.questions || []);
+            } catch (e) { console.error('Failed to load prefilled questions:', e); }
+        }, 300);
+    }
 
     // Quick Generate — filter concepts dropdown
     document.getElementById('qgSubject').addEventListener('change', function() {

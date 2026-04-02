@@ -4,6 +4,8 @@ import { ensureAuthenticated, ensureInstituteUser } from '../middleware/auth.js'
 import { computeJeeScore, computeAssignmentStatus } from '../helpers/scoring.js';
 import { getUserConceptMastery } from '../helpers/mastery.js';
 import { bktUpdateConcept } from '../services/bktClient.js';
+import { geminiGenerate } from '../helpers/gemini.js';
+import { aiRateLimiter } from '../middleware/aiRateLimit.js';
 
 const router = express.Router();
 
@@ -51,12 +53,18 @@ router.get('/assignments/create', ensureInstituteUser, async (req, res) => {
             `SELECT id, name, subject FROM concepts ORDER BY subject, name`
         );
 
+        // Pre-fill question IDs from query params (used by remedial assignment generation)
+        const prefillIds = req.query.prefill_ids
+            ? req.query.prefill_ids.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+            : [];
+
         res.render('assignment-create.ejs', {
             user: req.user,
             batches: batches.rows,
             subjects: subjects.rows.map(r => r.subject),
             concepts: concepts.rows,
             error: req.session.assignmentError || null,
+            prefillIds,
         });
         delete req.session.assignmentError;
     } catch (err) {
@@ -304,6 +312,47 @@ router.get('/assignments/:id/take', ensureAuthenticated, async (req, res) => {
             concept_id: q.concept_id,
         }));
 
+        // Predicted Score Range (Feature 14) — based on BKT mastery for assignment concepts
+        let predictedScore = null;
+        try {
+            const conceptIds = [...new Set(qResult.rows.map(q => q.concept_id).filter(Boolean))];
+            if (conceptIds.length > 0) {
+                const masteryResult = await db.query(
+                    `SELECT concept_id, mastery FROM user_concept_mastery WHERE user_id = $1 AND concept_id = ANY($2)`,
+                    [userId, conceptIds]
+                );
+                const masteryMap = {};
+                for (const m of masteryResult.rows) masteryMap[m.concept_id] = parseFloat(m.mastery);
+
+                let expectedCorrect = 0;
+                for (const q of qResult.rows) {
+                    const m = masteryMap[q.concept_id] || 0.2; // default prior
+                    expectedCorrect += m; // mastery ≈ P(correct)
+                }
+                const totalQ = qResult.rows.length;
+                // Score range: expected ± 1 std dev, using JEE scoring (+4/-1)
+                const expectedPct = expectedCorrect / totalQ;
+                const variance = expectedCorrect * (1 - expectedPct); // simplified binomial
+                const stdDev = Math.sqrt(variance);
+
+                const lowCorrect = Math.max(0, Math.round(expectedCorrect - stdDev));
+                const highCorrect = Math.min(totalQ, Math.round(expectedCorrect + stdDev));
+                const lowScore = lowCorrect * 4 - (totalQ - lowCorrect);
+                const highScore = highCorrect * 4 - (totalQ - highCorrect);
+                const maxScore = totalQ * 4;
+
+                predictedScore = {
+                    lowScore: Math.max(0, lowScore),
+                    highScore: Math.min(maxScore, highScore),
+                    maxScore,
+                    expectedPct: Math.round(expectedPct * 100),
+                    conceptCount: conceptIds.length,
+                };
+            }
+        } catch (predErr) {
+            console.error('Predicted score computation failed:', predErr.message);
+        }
+
         res.render('assignment-take.ejs', {
             user: req.user,
             assignment,
@@ -311,6 +360,7 @@ router.get('/assignments/:id/take', ensureAuthenticated, async (req, res) => {
             answers: req.session.assignmentState.answers,
             startTimestamp: req.session.assignmentState.startedAt,
             deadline: new Date(assignment.deadline).getTime(),
+            predictedScore,
         });
     } catch (err) {
         console.error('Error loading assignment:', err);
@@ -321,13 +371,18 @@ router.get('/assignments/:id/take', ensureAuthenticated, async (req, res) => {
 // POST /assignments/:id/answer — save answer (AJAX)
 router.post('/assignments/:id/answer', ensureAuthenticated, (req, res) => {
     const assignmentId = parseInt(req.params.id);
-    const { seq, answer } = req.body;
+    const { seq, answer, time_taken } = req.body;
 
     if (!req.session.assignmentState || req.session.assignmentState.assignmentId !== assignmentId) {
         return res.status(400).json({ error: 'No active assignment session.' });
     }
 
     req.session.assignmentState.answers[String(seq)] = answer;
+    // Store per-question time
+    if (time_taken !== undefined && time_taken !== null) {
+        if (!req.session.assignmentState.questionTimes) req.session.assignmentState.questionTimes = {};
+        req.session.assignmentState.questionTimes[String(seq)] = parseInt(time_taken) || 0;
+    }
     res.json({ ok: true });
 });
 
@@ -395,14 +450,19 @@ router.post('/assignments/:id/submit', ensureAuthenticated, async (req, res) => 
         for (const q of questions) {
             const selected = state.answers[String(q.seq)] || null;
             const isCorrect = selected ? (selected === q.correct_answer) : false;
+            const qTime = (state.questionTimes && state.questionTimes[String(q.seq)]) ? parseInt(state.questionTimes[String(q.seq)]) : null;
             await db.query(
-                `INSERT INTO assignment_answers (submission_id, question_id, selected_option, is_correct)
-                 VALUES ($1, $2, $3, $4)`,
-                [submissionId, q.id, selected, isCorrect]
+                `INSERT INTO assignment_answers (submission_id, question_id, selected_option, is_correct, time_taken_seconds)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [submissionId, q.id, selected, isCorrect, qTime]
             );
         }
 
         // Log user_question_attempts for answered questions (consistency with practice tracking)
+        // NOTE (Feature 4 — Spaced Repetition): Assignment wrong answers are logged here into
+        // user_question_attempts. The practice route's getQuestionFromDB helper already queries
+        // this table for recent errors (last 7 days) and prioritizes them. This means wrong
+        // assignment answers are automatically surfaced during concept practice sessions.
         for (const q of questions) {
             const selected = state.answers[String(q.seq)];
             if (!selected) continue;
@@ -505,7 +565,7 @@ router.get('/assignments/:id/results', ensureAuthenticated, async (req, res) => 
         const answersResult = await db.query(`
             SELECT aa.*, q.question_text, q.option1, q.option2, q.option3, q.option4,
                    q.correct_answer, q.concept_id, q.difficulty_tier, c.name AS concept_name,
-                   aq.question_order
+                   aq.question_order, aa.time_taken_seconds AS q_time_seconds
             FROM assignment_answers aa
             JOIN questions q ON q.id = aa.question_id
             JOIN assignment_questions aq ON aq.assignment_id = $1 AND aq.question_id = aa.question_id
@@ -787,6 +847,34 @@ router.get('/assignments/:id/submissions', ensureAuthenticated, async (req, res)
             [assignmentId]
         );
 
+        // Question-level analytics: accuracy per question (Feature 7)
+        const questionAnalytics = [];
+        if (submitted.length > 0) {
+            const qaResult = await db.query(`
+                SELECT aq.question_order, q.id AS question_id, q.question_text,
+                       COUNT(*) AS total_attempts,
+                       SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END) AS correct_count
+                FROM assignment_questions aq
+                JOIN questions q ON q.id = aq.question_id
+                LEFT JOIN assignment_answers aa ON aa.question_id = q.id
+                    AND aa.submission_id IN (SELECT id FROM assignment_submissions WHERE assignment_id = $1)
+                WHERE aq.assignment_id = $1
+                GROUP BY aq.question_order, q.id, q.question_text
+                ORDER BY (SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0)) ASC
+            `, [assignmentId]);
+            for (const row of qaResult.rows) {
+                const total = parseInt(row.total_attempts) || 0;
+                const correct = parseInt(row.correct_count) || 0;
+                questionAnalytics.push({
+                    question_order: row.question_order,
+                    question_text: row.question_text,
+                    correct_count: correct,
+                    total_attempts: total,
+                    accuracy: total > 0 ? Math.round((correct / total) * 100) : 0,
+                });
+            }
+        }
+
         res.render('assignment-submissions.ejs', {
             user: req.user,
             assignment,
@@ -794,10 +882,221 @@ router.get('/assignments/:id/submissions', ensureAuthenticated, async (req, res)
             aggregates,
             conceptBreakdown,
             questionCount: parseInt(qCountResult.rows[0].count),
+            questionAnalytics,
         });
     } catch (err) {
         console.error('Error loading submissions:', err);
         res.status(500).send('Server error');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// REMEDIAL ASSIGNMENT GENERATION (Feature 8)
+// ═══════════════════════════════════════════════════════════════
+
+// GET /assignments/:id/remedial — identify weak concepts and redirect to create with pre-selected questions
+router.get('/assignments/:id/remedial', ensureInstituteUser, async (req, res) => {
+    try {
+        const assignmentId = parseInt(req.params.id);
+
+        // Verify assignment exists and teacher owns it
+        const aResult = await db.query(
+            'SELECT a.*, b.name AS batch_name FROM assignments a JOIN batches b ON b.id = a.batch_id WHERE a.id = $1',
+            [assignmentId]
+        );
+        if (aResult.rowCount === 0) return res.status(404).send('Assignment not found.');
+        const assignment = aResult.rows[0];
+        if (assignment.created_by !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).send('Forbidden');
+        }
+
+        // Find concepts where batch accuracy < 50%
+        const weakConceptsResult = await db.query(`
+            SELECT q.concept_id,
+                   COUNT(*) AS total_answers,
+                   SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END) AS correct_count
+            FROM assignment_answers aa
+            JOIN questions q ON q.id = aa.question_id
+            JOIN assignment_submissions s ON s.id = aa.submission_id
+            WHERE s.assignment_id = $1 AND q.concept_id IS NOT NULL
+            GROUP BY q.concept_id
+            HAVING (SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0)) < 0.5
+        `, [assignmentId]);
+
+        const weakConceptIds = weakConceptsResult.rows.map(r => r.concept_id);
+
+        if (weakConceptIds.length === 0) {
+            req.session.assignmentError = 'No weak concepts found — students performed well on all concepts!';
+            return res.redirect(`/assignments/${assignmentId}/submissions`);
+        }
+
+        // Find similar questions from the bank for these weak concepts (exclude questions already in this assignment)
+        const existingQIds = await db.query(
+            'SELECT question_id FROM assignment_questions WHERE assignment_id = $1',
+            [assignmentId]
+        );
+        const excludeIds = existingQIds.rows.map(r => r.question_id);
+
+        const remedialQResult = await db.query(`
+            SELECT q.id FROM questions q
+            WHERE q.concept_id = ANY($1)
+              AND q.status = 'approved'
+              AND q.id != ALL($2)
+              AND (q.institute_id = $3 OR q.institute_id IS NULL)
+            ORDER BY RANDOM()
+            LIMIT 30
+        `, [weakConceptIds, excludeIds.length ? excludeIds : [0], req.user.institute_id]);
+
+        const questionIds = remedialQResult.rows.map(r => r.id);
+
+        if (questionIds.length === 0) {
+            req.session.assignmentError = 'No additional questions found for weak concepts. Try adding more questions to the bank.';
+            return res.redirect(`/assignments/${assignmentId}/submissions`);
+        }
+
+        res.redirect(`/assignments/create?prefill_ids=${questionIds.join(',')}`);
+    } catch (err) {
+        console.error('Error generating remedial assignment:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT RESULTS TO CSV (Feature 9)
+// ═══════════════════════════════════════════════════════════════
+
+// GET /assignments/:id/export-csv — download CSV of student results
+router.get('/assignments/:id/export-csv', ensureInstituteUser, async (req, res) => {
+    try {
+        const assignmentId = parseInt(req.params.id);
+
+        const aResult = await db.query(
+            'SELECT a.*, b.name AS batch_name FROM assignments a JOIN batches b ON b.id = a.batch_id WHERE a.id = $1',
+            [assignmentId]
+        );
+        if (aResult.rowCount === 0) return res.status(404).send('Assignment not found.');
+        const assignment = aResult.rows[0];
+        if (assignment.created_by !== req.user.id && req.user.role !== 'admin' &&
+            !(req.user.role === 'institute_admin' && req.user.institute_id === assignment.institute_id)) {
+            return res.status(403).send('Forbidden');
+        }
+
+        const studentsResult = await db.query(`
+            SELECT u.name, u.email, s.score, s.max_score, s.time_taken_seconds, s.submitted_at
+            FROM batch_students bs
+            JOIN users u ON u.id = bs.user_id
+            LEFT JOIN assignment_submissions s ON s.assignment_id = $1 AND s.user_id = u.id
+            WHERE bs.batch_id = $2
+            ORDER BY u.name
+        `, [assignmentId, assignment.batch_id]);
+
+        const now = new Date();
+        const deadlinePassed = new Date(assignment.deadline) <= now;
+
+        let csv = 'Student Name,Email,Status,Score,Max Score,Percentage,Time Taken\n';
+        for (const s of studentsResult.rows) {
+            const status = s.submitted_at ? 'Completed' : (deadlinePassed ? 'Missed' : 'Pending');
+            const score = s.score !== null ? s.score : '';
+            const maxScore = s.max_score !== null ? s.max_score : '';
+            const pct = (s.score !== null && s.max_score) ? Math.round((s.score / s.max_score) * 100) + '%' : '';
+            const time = s.time_taken_seconds !== null ? `${Math.floor(s.time_taken_seconds / 60)}m ${s.time_taken_seconds % 60}s` : '';
+            const name = `"${(s.name || '').replace(/"/g, '""')}"`;
+            const email = `"${(s.email || '').replace(/"/g, '""')}"`;
+            csv += `${name},${email},${status},${score},${maxScore},${pct},${time}\n`;
+        }
+
+        const filename = `${assignment.title.replace(/[^a-zA-Z0-9]/g, '_')}_results.csv`;
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csv);
+    } catch (err) {
+        console.error('Error exporting CSV:', err);
+        res.status(500).send('Server error');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AI-POWERED EXPLANATION FOR WRONG ANSWERS
+// ═══════════════════════════════════════════════════════════════
+
+// POST /api/assignments/explain — Gemini explanation for a wrong answer
+router.post('/api/assignments/explain', ensureAuthenticated, aiRateLimiter, async (req, res) => {
+    try {
+        const { question_text, options, student_answer, correct_answer, concept_name } = req.body;
+        if (!question_text || !correct_answer) {
+            return res.status(400).json({ error: 'Missing required fields.' });
+        }
+
+        const optionLabels = { option1: 'A', option2: 'B', option3: 'C', option4: 'D' };
+        const systemPrompt = `You are a patient JEE tutor. A student got a question wrong. Give a clear, step-by-step explanation of:
+1. Why the correct answer is correct
+2. Why the student's chosen answer is wrong (common misconception)
+3. The key concept or formula to remember
+
+Rules:
+- Be concise (3-4 short paragraphs max)
+- Use $...$ for inline math
+- Sound like a helpful senior student, not a textbook
+- Do NOT repeat the question text`;
+
+        const userPrompt = `Question: ${question_text}
+
+Options:
+A) ${options?.option1 || ''}
+B) ${options?.option2 || ''}
+C) ${options?.option3 || ''}
+D) ${options?.option4 || ''}
+
+Student chose: ${optionLabels[student_answer] || student_answer || 'None'}
+Correct answer: ${optionLabels[correct_answer] || correct_answer}
+${concept_name ? `Concept: ${concept_name}` : ''}
+
+Explain step-by-step why the correct answer is right and where the student likely went wrong.`;
+
+        const explanation = await geminiGenerate(systemPrompt, userPrompt, 'gemini-2.5-flash');
+        res.json({ explanation: explanation || 'Could not generate explanation.' });
+    } catch (err) {
+        console.error('AI explain error:', err);
+        res.status(500).json({ error: 'Failed to generate explanation.' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// STUDENT WEAKNESS HEATMAP (Feature 13)
+// ═══════════════════════════════════════════════════════════════
+
+// GET /api/student/weakness-heatmap — per-concept accuracy across all assignments
+router.get('/api/student/weakness-heatmap', ensureAuthenticated, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const result = await db.query(`
+            SELECT c.id AS concept_id, c.name AS concept_name, c.subject,
+                   COUNT(*) AS total_answers,
+                   SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END) AS correct_count
+            FROM assignment_answers aa
+            JOIN assignment_submissions s ON s.id = aa.submission_id
+            JOIN questions q ON q.id = aa.question_id
+            JOIN concepts c ON c.id = q.concept_id
+            WHERE s.user_id = $1
+            GROUP BY c.id, c.name, c.subject
+            HAVING COUNT(*) >= 2
+            ORDER BY (SUM(CASE WHEN aa.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
+        `, [userId]);
+
+        const concepts = result.rows.map(r => ({
+            concept_id: r.concept_id,
+            concept_name: r.concept_name,
+            subject: r.subject,
+            total: parseInt(r.total_answers),
+            correct: parseInt(r.correct_count),
+            accuracy: Math.round((parseInt(r.correct_count) / parseInt(r.total_answers)) * 100),
+        }));
+
+        res.json({ concepts });
+    } catch (err) {
+        console.error('Error fetching weakness heatmap:', err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 

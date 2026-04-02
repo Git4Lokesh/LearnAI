@@ -86,7 +86,15 @@
 <div class="top-bar">
     <div class="title"><i class="bi bi-bar-chart-line"></i> Submissions</div>
     <div class="actions">
-        <a href="/assignments" style="color:var(--text-muted);text-decoration:none;font-size:0.85rem;display:flex;align-items:center;gap:4px;"><i class="bi bi-arrow-left"></i> Back to Assignments</a>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <a href="/assignments/<%= assignment.id %>/export-csv" style="color:var(--green-light);text-decoration:none;font-size:0.82rem;display:flex;align-items:center;gap:4px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);padding:6px 14px;font-weight:600;transition:var(--transition);" onmouseenter="this.style.background='rgba(16,185,129,0.2)'" onmouseleave="this.style.background='rgba(16,185,129,0.1)'">
+                <i class="bi bi-download"></i> Download CSV
+            </a>
+            <a href="/assignments/<%= assignment.id %>/remedial" style="color:var(--gold);text-decoration:none;font-size:0.82rem;display:flex;align-items:center;gap:4px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-sm);padding:6px 14px;font-weight:600;transition:var(--transition);" onmouseenter="this.style.background='rgba(245,158,11,0.2)'" onmouseleave="this.style.background='rgba(245,158,11,0.1)'">
+                <i class="bi bi-bandaid"></i> Create Remedial
+            </a>
+            <a href="/assignments" style="color:var(--text-muted);text-decoration:none;font-size:0.85rem;display:flex;align-items:center;gap:4px;"><i class="bi bi-arrow-left"></i> Back to Assignments</a>
+        </div>
     </div>
 </div>
 <div class="page-wrap">
@@ -172,6 +180,43 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Question Analytics (Feature 7) -->
+    <% if (typeof questionAnalytics !== 'undefined' && questionAnalytics.length > 0) { %>
+    <div class="section-title" style="margin-top:2rem;"><i class="bi bi-graph-up"></i> Question Analytics <span style="font-size:0.72rem;color:var(--text-dim);font-weight:400;margin-left:6px;">(hardest first)</span></div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Q#</th>
+                    <th>Question</th>
+                    <th>Correct</th>
+                    <th>Total</th>
+                    <th>Accuracy</th>
+                    <th style="min-width:100px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% questionAnalytics.forEach(qa => {
+                    const barColor = qa.accuracy >= 80 ? 'var(--green)' : qa.accuracy >= 50 ? 'var(--gold)' : 'var(--red)';
+                %>
+                <tr>
+                    <td style="font-weight:600;">Q.<%= qa.question_order %></td>
+                    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><%= qa.question_text.substring(0, 80) %><%= qa.question_text.length > 80 ? '...' : '' %></td>
+                    <td><%= qa.correct_count %></td>
+                    <td><%= qa.total_attempts %></td>
+                    <td style="font-weight:600;color:<%= barColor %>;"><%= qa.accuracy %>%</td>
+                    <td>
+                        <div style="width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+                            <div style="width:<%= qa.accuracy %>%;height:100%;background:<%= barColor %>;border-radius:3px;"></div>
+                        </div>
+                    </td>
+                </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    </div>
+    <% } %>
 </div>
 </body>
 </html>

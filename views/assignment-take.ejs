@@ -143,6 +143,21 @@
 
     <div class="test-body">
         <div class="question-panel" id="questionPanel">
+            <% if (typeof predictedScore !== 'undefined' && predictedScore) { %>
+            <div id="predictedScoreCard" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);padding:12px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:12px;position:relative;">
+                <i class="bi bi-graph-up-arrow" style="color:var(--gold);font-size:1.2rem;flex-shrink:0;"></i>
+                <div style="flex:1;">
+                    <div style="font-size:0.78rem;font-weight:600;color:var(--gold);margin-bottom:2px;">Predicted Score Range</div>
+                    <div style="font-size:0.85rem;color:var(--text-secondary);">
+                        Based on your mastery across <%= predictedScore.conceptCount %> concept<%= predictedScore.conceptCount > 1 ? 's' : '' %>:
+                        <strong style="color:var(--text-primary);"><%= predictedScore.lowScore %>–<%= predictedScore.highScore %></strong>
+                        out of <%= predictedScore.maxScore %>
+                        <span style="font-size:0.75rem;color:var(--text-dim);margin-left:4px;">(~<%= predictedScore.expectedPct %>% expected accuracy)</span>
+                    </div>
+                </div>
+                <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1rem;padding:4px;flex-shrink:0;" title="Dismiss"><i class="bi bi-x"></i></button>
+            </div>
+            <% } %>
             <div class="q-header">
                 <span class="q-number" id="qNumber">Q.1</span>
                 <span class="q-difficulty" id="qDifficulty">Medium</span>
@@ -221,6 +236,15 @@
 
     let currentSeq = 1;
     let submitting = false;
+    // Per-question time tracking
+    const questionTimes = {}; // { seq: accumulated_ms }
+    let questionEnteredAt = Date.now(); // when current question was entered
+
+    function recordTimeOnCurrentQuestion() {
+        const elapsed = Date.now() - questionEnteredAt;
+        const key = String(currentSeq);
+        questionTimes[key] = (questionTimes[key] || 0) + elapsed;
+    }
 
     function getQ(seq) { return questions.find(q => q.seq === seq); }
 
@@ -233,7 +257,7 @@
             btn.className = 'palette-btn';
             btn.textContent = i;
             btn.dataset.seq = i;
-            btn.addEventListener('click', () => { currentSeq = i; render(); closePalette(); });
+            btn.addEventListener('click', () => { recordTimeOnCurrentQuestion(); currentSeq = i; questionEnteredAt = Date.now(); render(); closePalette(); });
             grid.appendChild(btn);
         }
     }
@@ -280,9 +304,10 @@
             document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = (r.value === val); });
             document.querySelectorAll('.option-item').forEach(i => { i.classList.toggle('selected', i.dataset.option === val); });
             updatePalette();
+            const timeSec = Math.round((questionTimes[String(currentSeq)] || 0) / 1000 + (Date.now() - questionEnteredAt) / 1000);
             await fetch(`/assignments/${assignmentId}/answer`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ seq: currentSeq, answer: val }),
+                body: JSON.stringify({ seq: currentSeq, answer: val, time_taken: timeSec }),
             }).catch(e => console.error('Save failed:', e));
         });
     });
@@ -301,13 +326,17 @@
 
     // Nav
     document.getElementById('btnNext').addEventListener('click', () => {
+        recordTimeOnCurrentQuestion();
         if (currentSeq < questions.length) currentSeq++;
         else currentSeq = 1;
+        questionEnteredAt = Date.now();
         render();
     });
     document.getElementById('btnPrev').addEventListener('click', () => {
+        recordTimeOnCurrentQuestion();
         if (currentSeq > 1) currentSeq--;
         else currentSeq = questions.length;
+        questionEnteredAt = Date.now();
         render();
     });
 

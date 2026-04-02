@@ -207,6 +207,45 @@
         </div>
     </div>
 
+    <!-- Concept-wise Performance Breakdown -->
+    <%
+        const conceptMap = {};
+        answers.forEach(a => {
+            const cid = a.concept_id || 'unknown';
+            const cname = a.concept_name || 'Uncategorized';
+            if (!conceptMap[cid]) conceptMap[cid] = { name: cname, correct: 0, total: 0 };
+            conceptMap[cid].total++;
+            if (a.is_correct) conceptMap[cid].correct++;
+        });
+        const conceptEntries = Object.entries(conceptMap).sort((a, b) => {
+            const pctA = a[1].total > 0 ? (a[1].correct / a[1].total) * 100 : 0;
+            const pctB = b[1].total > 0 ? (b[1].correct / b[1].total) * 100 : 0;
+            return pctA - pctB;
+        });
+    %>
+    <% if (conceptEntries.length > 0) { %>
+    <div style="background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1.5rem;box-shadow:var(--shadow-sm);">
+        <div style="font-size:1rem;font-weight:600;color:var(--text-primary);margin-bottom:1rem;display:flex;align-items:center;gap:8px;">
+            <i class="bi bi-bar-chart-line" style="color:var(--gold);"></i> Concept-wise Performance
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <% conceptEntries.forEach(([cid, cd]) => {
+                const pct = cd.total > 0 ? Math.round((cd.correct / cd.total) * 100) : 0;
+                const barColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--gold)' : 'var(--red)';
+            %>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.85rem;color:var(--text-secondary);"><%= cd.name %></span>
+                    <span style="font-size:0.75rem;color:var(--text-dim);flex-shrink:0;width:40px;text-align:right;"><%= cd.correct %>/<%= cd.total %></span>
+                    <div style="width:120px;height:8px;background:var(--border);border-radius:4px;overflow:hidden;flex-shrink:0;">
+                        <div style="width:<%= pct %>%;height:100%;background:<%= barColor %>;border-radius:4px;transition:width 0.4s ease;"></div>
+                    </div>
+                    <span style="font-size:0.78rem;font-weight:600;color:<%= barColor %>;width:40px;text-align:right;flex-shrink:0;"><%= pct %>%</span>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+    <% } %>
+
     <div class="review-header">
         <span class="review-title">Question Review</span>
     </div>
@@ -281,13 +320,68 @@
                     <% if (a.concept_name) { %>
                         <span><i class="bi bi-tag"></i> <%= a.concept_name %></span>
                     <% } %>
+                    <% if (a.q_time_seconds) { %>
+                        <span><i class="bi bi-clock"></i> <%= a.q_time_seconds >= 60 ? Math.floor(a.q_time_seconds / 60) + 'm ' : '' %><%= a.q_time_seconds % 60 %>s</span>
+                    <% } %>
+                    <% if (a.selected_option && !a.is_correct && a.concept_id) { %>
+                        <a href="/practice/<%= a.concept_id %>" style="font-size:0.78rem;color:var(--purple-light);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" onmouseenter="this.style.textDecoration='underline'" onmouseleave="this.style.textDecoration='none'">
+                            <i class="bi bi-arrow-repeat"></i> Practice this concept
+                        </a>
+                    <% } %>
+                    <% if (a.selected_option && !a.is_correct) { %>
+                        <button class="btn-explain" data-idx="<%= i %>" onclick="explainAnswer(this, <%= i %>)" style="font-size:0.78rem;color:var(--cyan);background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.25);border-radius:var(--radius-sm);padding:3px 10px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:4px;transition:var(--transition);" onmouseenter="this.style.borderColor='var(--cyan)'" onmouseleave="this.style.borderColor='rgba(34,211,238,0.25)'">
+                            <i class="bi bi-lightbulb"></i> Explain
+                        </button>
+                    <% } %>
                 </div>
+                <div class="explanation-box" id="explanation-<%= i %>" style="display:none;margin-top:0.75rem;padding:1rem;background:rgba(34,211,238,0.05);border:1px solid rgba(34,211,238,0.15);border-radius:var(--radius-sm);font-size:0.88rem;color:var(--text-secondary);line-height:1.7;"></div>
             </div>
         <% }); %>
     </div>
 </div>
 
 <script>
+const answersData = <%- JSON.stringify(answers.map(a => ({
+    question_text: a.question_text,
+    option1: a.option1, option2: a.option2, option3: a.option3, option4: a.option4,
+    selected_option: a.selected_option, correct_answer: a.correct_answer,
+    concept_name: a.concept_name
+}))) %>;
+
+async function explainAnswer(btn, idx) {
+    const box = document.getElementById('explanation-' + idx);
+    if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+    if (box.dataset.loaded === 'true') { box.style.display = 'block'; return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
+    box.style.display = 'block';
+    box.innerHTML = '<div style="text-align:center;color:var(--text-dim);"><div class="loading-spinner" style="width:24px;height:24px;border-width:2px;margin:0 auto 8px;"></div>Generating explanation...</div>';
+
+    try {
+        const a = answersData[idx];
+        const res = await fetch('/api/assignments/explain', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question_text: a.question_text,
+                options: { option1: a.option1, option2: a.option2, option3: a.option3, option4: a.option4 },
+                student_answer: a.selected_option,
+                correct_answer: a.correct_answer,
+                concept_name: a.concept_name
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        box.innerHTML = data.explanation.replace(/\n/g, '<br>');
+        box.dataset.loaded = 'true';
+        if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([box]).catch(() => {});
+    } catch (e) {
+        box.innerHTML = '<span style="color:var(--red);">Failed to generate explanation. ' + (e.message || '') + '</span>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightbulb"></i> Explain';
+}
+
 function filterTo(type) {
     // Update tabs
     document.querySelectorAll('.filter-tab').forEach(tab => {
