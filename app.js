@@ -27,6 +27,8 @@ import setupGroupStudyRoutes from './routes/groupStudy.js';
 import adminRoutes from './routes/admin.js';
 import aiRoutes from './routes/ai.js';
 import assignmentRoutes from './routes/assignments.js';
+import onboardingRoutes from './routes/onboarding.js';
+import tenantContext from './middleware/tenantContext.js';
 
 dotenv.config();
 
@@ -65,6 +67,9 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Tenant context — sets req.tenantId for Row-Level Security
+app.use(tenantContext);
 
 // Passport configuration
 passport.use(new Strategy({
@@ -134,6 +139,7 @@ app.use(setupGroupStudyRoutes(io));
 app.use(adminRoutes);
 app.use(aiRoutes);
 app.use(assignmentRoutes);
+app.use(onboardingRoutes);
 
 // WebSocket connection handling
 io.use((socket, next) => {
