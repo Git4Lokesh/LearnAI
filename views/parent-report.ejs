@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Report — <%= student.name %></title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #1a1a2e;
+            line-height: 1.5;
+            padding: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            padding: 24px 16px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+        .header .institute { color: #6b7280; font-size: 0.9rem; }
+        .header .student-name { font-size: 1.1rem; color: #3b82f6; margin-top: 8px; }
+        .header .date { font-size: 0.8rem; color: #9ca3af; margin-top: 4px; }
+
+        .subject-card {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .subject-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .subject-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .mastery-badge {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .mastery-high { background: #d1fae5; color: #065f46; }
+        .mastery-mid { background: #fef3c7; color: #92400e; }
+        .mastery-low { background: #fee2e2; color: #991b1b; }
+
+        .chapter {
+            padding: 12px 20px;
+            border-bottom: 1px solid #f8f8f8;
+        }
+        .chapter:last-child { border-bottom: none; }
+        .chapter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .chapter-name { font-weight: 500; font-size: 0.95rem; }
+        .chapter-pct { font-size: 0.85rem; color: #6b7280; }
+
+        .bar-container {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.6s ease;
+        }
+        .bar-green { background: linear-gradient(90deg, #34d399, #10b981); }
+        .bar-yellow { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .bar-red { background: linear-gradient(90deg, #f87171, #ef4444); }
+
+        .concepts-list {
+            margin-top: 8px;
+            padding-left: 12px;
+        }
+        .concept-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            font-size: 0.85rem;
+            color: #4b5563;
+        }
+        .concept-row .pct { font-weight: 500; }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 8px; }
+            .subject-header, .chapter { padding: 12px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <% if (institute.logoUrl) { %>
+            <img src="<%= institute.logoUrl %>" alt="" style="height:40px;margin-bottom:8px;">
+        <% } %>
+        <div class="institute"><%= institute.name %></div>
+        <h1>Student Progress Report</h1>
+        <div class="student-name"><%= student.name %></div>
+        <div class="date">Generated: <%= new Date(generatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) %></div>
+    </div>
+
+    <% for (const [subjName, subj] of Object.entries(subjects)) { %>
+        <div class="subject-card">
+            <div class="subject-header">
+                <h2><%= subjName %></h2>
+                <span class="mastery-badge <%= subj.avgMastery >= 70 ? 'mastery-high' : subj.avgMastery >= 40 ? 'mastery-mid' : 'mastery-low' %>">
+                    <%= subj.avgMastery %>%
+                </span>
+            </div>
+
+            <% for (const [chName, ch] of Object.entries(subj.chapters)) { %>
+                <div class="chapter">
+                    <div class="chapter-header">
+                        <span class="chapter-name"><%= chName %></span>
+                        <span class="chapter-pct"><%= ch.avgMastery %>%</span>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-fill <%= ch.avgMastery >= 70 ? 'bar-green' : ch.avgMastery >= 40 ? 'bar-yellow' : 'bar-red' %>"
+                             style="width: <%= ch.avgMastery %>%"></div>
+                    </div>
+                    <% if (ch.concepts.length <= 6) { %>
+                        <div class="concepts-list">
+                            <% for (const c of ch.concepts) { %>
+                                <div class="concept-row">
+                                    <span><%= c.name %></span>
+                                    <span class="pct" style="color: <%= c.mastery >= 0.7 ? '#059669' : c.mastery >= 0.4 ? '#d97706' : '#dc2626' %>">
+                                        <%= Math.round(c.mastery * 100) %>%
+                                    </span>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% } %>
+                </div>
+            <% } %>
+        </div>
+    <% } %>
+
+    <% if (Object.keys(subjects).length === 0) { %>
+        <div class="subject-card" style="padding:40px;text-align:center;color:#6b7280;">
+            <p>No practice data available yet.</p>
+            <p style="font-size:0.85rem;margin-top:8px;">Your child hasn't started practicing on the platform.</p>
+        </div>
+    <% } %>
+
+    <div class="footer">
+        <p>This report shows concept-level mastery based on adaptive practice data.</p>
+        <p>Powered by <%= institute.name %></p>
+    </div>
+</body>
+</html>

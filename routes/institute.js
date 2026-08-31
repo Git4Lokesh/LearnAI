@@ -7,6 +7,8 @@ import { geminiGenerate } from '../helpers/gemini.js';
 import { classifyQuestionConcept } from '../services/conceptTagger.js';
 import { parseUploadedFile } from '../services/fileParser.js';
 import { checkPrerequisiteGaps, getOptimalLearningPath } from '../services/prerequisiteService.js';
+import { preventRoleElevation } from '../middleware/roleElevation.js';
+import { auditLog, AUDIT_ACTIONS } from '../services/auditService.js';
 
 const router = express.Router();
 const saltRounds = 12;
@@ -138,7 +140,7 @@ router.get("/institute/invite", ensureAuthenticated, ensureInstituteAdmin, (req,
     res.render("institute-invite.ejs", { user: req.user, success, error });
 });
 
-router.post("/institute/invite", ensureAuthenticated, ensureInstituteAdmin, async (req, res) => {
+router.post("/institute/invite", ensureAuthenticated, ensureInstituteAdmin, preventRoleElevation('role'), async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
         const instituteId = req.user.institute_id;

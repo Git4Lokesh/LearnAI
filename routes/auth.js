@@ -53,6 +53,11 @@ router.get("/login", (req, res) => {
     res.render("login.ejs", { error });
 });
 
+// Student simplified login page (school_code + roll_no + PIN)
+router.get("/student-login", (req, res) => {
+    res.render("student-login.ejs");
+});
+
 router.post("/signup", async (req, res) => {
     try {
         const name = req.body.fullName;
