@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Tuple
 import asyncpg
 import os
 import logging
+from urllib.parse import urlparse, unquote
 from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO)
@@ -40,12 +41,27 @@ TIER_EXPECTED_TIME = {1: 60, 2: 120, 3: 180}
 @app.on_event("startup")
 async def startup():
     global pool
-    pool = await asyncpg.create_pool(
-        host=os.environ.get('DB_HOST', 'localhost'), port=5432, user='postgres',
-        password=os.environ.get('db_password'),
-        database=os.environ.get('db_name', 'Content Storage'),
-        min_size=2, max_size=10
-    )
+    database_url = os.environ.get('DATABASE_URL') or os.environ.get('BKT_DATABASE_URL')
+    if database_url:
+        parsed = urlparse(database_url)
+        pool_options = {
+            'host': parsed.hostname,
+            'port': parsed.port or 5432,
+            'user': unquote(parsed.username or ''),
+            'password': unquote(parsed.password or ''),
+            'database': unquote(parsed.path.lstrip('/')),
+        }
+        if parsed.query and 'sslmode=require' in parsed.query:
+            pool_options['ssl'] = 'require'
+    else:
+        pool_options = {
+            'host': os.environ.get('DB_HOST', 'localhost'),
+            'port': int(os.environ.get('DB_PORT', '5432')),
+            'user': os.environ.get('DB_USER', 'postgres'),
+            'password': os.environ.get('DB_PASSWORD') or os.environ.get('db_password'),
+            'database': os.environ.get('DB_NAME') or os.environ.get('db_name', 'Content Storage'),
+        }
+    pool = await asyncpg.create_pool(**pool_options, min_size=2, max_size=10)
     logger.info("DB connection pool created")
     await reload_learned_params()
 
