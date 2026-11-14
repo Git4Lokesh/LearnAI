@@ -112,14 +112,15 @@
 - **Custom CSS** - Royal dark theme
 
 ### Backend
-- **Node.js 18+** - JavaScript runtime
+- **Node.js 22+** - JavaScript runtime
 - **Express.js** - Web framework
 - **PostgreSQL** - Primary database
 - **Passport.js** - Authentication middleware
 - **BCrypt** - Password hashing
 
 ### AI & Machine Learning
-- **Perplexity AI (Sonar Pro)** - Content generation
+- **Google Gemini** - Content generation and tutoring
+- **Perplexity AI** - Chat responses
 - **LangChain** - Chat conversation management
 - **LlamaParse** - PDF text extraction
 - **FastAPI** - BKT service (Python)
@@ -189,7 +190,7 @@
 - Session storage for temporary data
 
 **4. AI Services Layer**
-- Perplexity AI for content generation
+- Gemini and Perplexity for AI features
 - LlamaParse for PDF processing
 - Custom BKT service for adaptive learning
 
@@ -199,7 +200,7 @@
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js** (v18 or higher) - [Download](https://nodejs.org/)
+- **Node.js** (v22 or higher) - [Download](https://nodejs.org/)
 - **PostgreSQL** (v14 or higher) - [Download](https://www.postgresql.org/download/)
 - **Python** (v3.11 or higher) - [Download](https://www.python.org/downloads/)
 - **Docker** (optional, for containerized deployment) - [Download](https://www.docker.com/products/docker-desktop/)
@@ -208,8 +209,9 @@ Before you begin, ensure you have the following installed:
 
 You'll need to obtain the following API keys:
 
-1. **Perplexity AI API Key** - [Get it here](https://www.perplexity.ai/)
-2. **LlamaCloud API Key** - [Get it here](https://cloud.llamaindex.ai/)
+1. **Google Gemini API Key** - [Get it here](https://aistudio.google.com/)
+2. **Perplexity API Key** - used by chat features
+3. **LlamaCloud API Key** - [Get it here](https://cloud.llamaindex.ai/)
 
 ---
 
@@ -291,17 +293,21 @@ PORT=3000
 NODE_ENV=development
 
 # Database Configuration
-DATABASE_URL=postgresql://postgres:postgrespass1!@localhost:5432/Content Storage
+DATABASE_URL=postgresql://postgres:password@localhost:5432/Content%20Storage
+DB_SSL=false
 
 # Session Secret (generate a random string)
-SESSION_SECRET=your-super-secret-session-key-here
+SESSION_SECRET=replace-with-a-random-secret-at-least-32-characters-long
 
 # API Keys
-PERPLEXITY_API_KEY=your-perplexity-api-key
+GEMINI_API_KEY=your-gemini-api-key
 LLAMA_CLOUD_API_KEY=your-llama-cloud-api-key
 
 # BKT Service URL
 BKT_BASE_URL=http://127.0.0.1:8000
+APP_ORIGIN=http://localhost:3000
+# Optional in local development; required when NODE_ENV=production
+# REDIS_URL=redis://localhost:6379
 ```
 
 #### 5. Start the Application
@@ -318,7 +324,15 @@ The application will be available at `http://localhost:3000`
 
 ---
 
-### Option 2: Docker Deployment
+### Prototype deployment
+
+For a small hosted prototype, use a managed PostgreSQL database and Redis, deploy the Node app and BKT service as separate containers, and configure the environment variables above in your hosting provider's secret manager. Set `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET` (at least 32 characters), `APP_ORIGIN` (the exact public app origin), `BKT_BASE_URL`, and the AI keys for features you enable. The app exposes `/health` for liveness and `/health/ready` for database/session-store readiness. Review and apply the required schema migrations against staging first; **do not run `database_setup.sql` against an existing database**, because it drops tables.
+
+The development `docker-compose.yml` below is for local development only. Do not deploy it as-is: it mounts source code and runs nodemon.
+
+The repository also includes `docker-compose.production.yml` for a single-host prototype. Set `DATABASE_URL`, `SESSION_SECRET`, and `APP_ORIGIN` in the shell or a protected `.env` file, then run `docker compose -f docker-compose.production.yml up --build -d`. It starts the app, BKT service, and a persistent Redis container; PostgreSQL remains external. On a managed container platform, configure the same environment variables and deploy the app and BKT containers separately.
+
+### Option 2: Docker Development
 
 #### 1. Configure Environment Variables
 
@@ -344,16 +358,7 @@ The application will be available at `http://localhost:3000`
 
 ### Database Configuration
 
-Update the database connection in `app.js`:
-```javascript
-const db = new pg.Client({
-  host: 'localhost',
-  port: 5432,
-  user: 'postgres',
-  password: 'your-password',
-  database: 'Content Storage',
-});
-```
+The application reads `DATABASE_URL` when provided. For local development, it can also use `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` (defaults to `Content Storage`). Set `DB_SSL=true` when the database provider requires TLS.
 
 ### BKT Parameters
 

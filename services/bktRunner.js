@@ -109,6 +109,13 @@ export async function ensureBktService(baseUrl = DEFAULT_BASE_URL) {
   // If already healthy, nothing to do
   if (await isHealthy(baseUrl, 800)) return;
 
+  // In hosted/container deployments the BKT service has its own lifecycle.
+  // Never install Python packages or spawn a detached process at app startup.
+  if (process.env.NODE_ENV === 'production' || process.env.BKT_BASE_URL) {
+    console.warn(`BKT: configured service is unavailable at ${baseUrl}`);
+    return;
+  }
+
   try {
     await installRequirements();
   } catch (e) {

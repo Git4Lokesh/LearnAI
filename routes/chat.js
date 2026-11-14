@@ -39,7 +39,7 @@ router.post("/api/chat", ensureAuthenticated, chatLimiter, async (req, res) => {
     }
 });
 
-router.post("/api/chat/upload-pdf", ensureAuthenticated, upload.single('document'), async (req, res) => {
+router.post("/api/chat/upload-pdf", ensureAuthenticated, chatLimiter, upload.single('document'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'PDF file required' });
         const { sessionId } = req.body;
@@ -53,7 +53,7 @@ router.post("/api/chat/upload-pdf", ensureAuthenticated, upload.single('document
 });
 
 // Translation API endpoint
-router.post("/api/translate", async (req, res) => {
+router.post("/api/translate", ensureAuthenticated, chatLimiter, async (req, res) => {
     try {
         const { text, targetLanguage, sourceLanguage = 'en' } = req.body;
 
@@ -63,6 +63,9 @@ router.post("/api/translate", async (req, res) => {
 
         if (!targetLanguage) {
             return res.status(400).json({ error: 'Target language is required' });
+        }
+        if (typeof text !== 'string' || text.length > 10000) {
+            return res.status(400).json({ error: 'Text must be a string under 10000 characters' });
         }
 
         const { translateText } = await import('../services/translationService.js');
@@ -76,7 +79,7 @@ router.post("/api/translate", async (req, res) => {
 });
 
 // Batch translation API endpoint
-router.post("/api/translate/batch", async (req, res) => {
+router.post("/api/translate/batch", ensureAuthenticated, chatLimiter, async (req, res) => {
     try {
         const { texts, targetLanguage, sourceLanguage = 'en' } = req.body;
 
@@ -86,6 +89,9 @@ router.post("/api/translate/batch", async (req, res) => {
 
         if (!targetLanguage) {
             return res.status(400).json({ error: 'Target language is required' });
+        }
+        if (texts.length > 50 || texts.some((text) => typeof text !== 'string' || text.length > 10000)) {
+            return res.status(400).json({ error: 'Provide at most 50 text items, each under 10000 characters' });
         }
 
         const { translateMultiple } = await import('../services/translationService.js');

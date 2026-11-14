@@ -17,6 +17,17 @@ import {
 export default function setupGroupStudyRoutes(io) {
     const router = express.Router();
 
+    async function removeUserSocketsFromRoom(roomId, userId) {
+        const sockets = await io.fetchSockets();
+        const sessionResult = await db.query('SELECT id FROM study_sessions WHERE room_id = $1', [roomId]);
+        const sessionRooms = sessionResult.rows.map((row) => `session_${row.id}`);
+        for (const socket of sockets) {
+            if (socket.data.userId !== Number(userId)) continue;
+            await socket.leave(`room_${roomId}`);
+            for (const sessionRoom of sessionRooms) await socket.leave(sessionRoom);
+        }
+    }
+
 // Group Study Routes
 router.get("/group-study", ensureAuthenticated, async (req, res) => {
     try {
@@ -230,6 +241,8 @@ router.delete("/group-study/room/:roomId/leave", ensureAuthenticated, async (req
 
         await leaveRoom(db, parseInt(roomId), req.user.id);
 
+        await removeUserSocketsFromRoom(parseInt(roomId), req.user.id);
+
         io.to(`room_${roomId}`).emit('member_left', { userId: req.user.id });
 
         res.json({ success: true });
@@ -259,6 +272,8 @@ router.delete("/group-study/room/:roomId/member/:userId", ensureAuthenticated, a
         const { roomId, userId } = req.params;
 
         await removeUserFromRoom(db, parseInt(roomId), req.user.id, parseInt(userId));
+
+        await removeUserSocketsFromRoom(parseInt(roomId), parseInt(userId));
 
         io.to(`room_${roomId}`).emit('member_removed', { userId: parseInt(userId) });
 
